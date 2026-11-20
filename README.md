@@ -37,3 +37,7 @@ Sem placa de som/ASIO SDK o JUCE usa WASAPI no Windows; para ASIO defina `JUCE_A
 - **Mixer**: fader de volume, pan, mudo (M) e solo (S) por peça (Bateria eletrônica ou EAD), canal dos microfones e volume geral, com medidores.
 - **Efeitos**: reverb, equalizador de 3 bandas, compressor e eco (delay) no mix principal, e **efeitos por peça**: envio de reverb, envio de eco e EQ próprio para cada peça (ex.: mais reverb só na caixa).
 - **MIDI**: entrada (módulo/teclado dispara os pads), saída (cada batida envia uma nota), notas editáveis por peça com "Aprender".
+
+## Instalação
+- **Windows:** baixe `NexusDrumTrigger-Setup.exe` na página de Releases e execute. Ele cria atalhos no Menu Iniciar (e na área de trabalho, se quiser) e pode ser desinstalado em Configurações › Aplicativos.
+- **Mac:** abra `NexusDrumTrigger-macOS.dmg` e arraste o app para **Aplicativos**. Na primeira vez, clique com o botão direito no app e escolha **Abrir**.

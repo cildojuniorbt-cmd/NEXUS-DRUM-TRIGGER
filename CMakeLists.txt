@@ -21,7 +21,11 @@ if(NEXUS_BUILD_APP)
 
   juce_add_gui_app(NexusDrumTrigger
     PRODUCT_NAME "Nexus Drum Trigger"
-    COMPANY_NAME "Nexus Works Digital")
+    COMPANY_NAME "Nexus Works Digital"
+    BUNDLE_ID com.nexusworksdigital.drumtrigger
+    ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "O Nexus Drum Trigger usa a entrada de audio para ler os microfones e triggers da bateria.")
 
   juce_add_binary_data(NexusAssets SOURCES assets/kit.png)
 

@@ -15,13 +15,18 @@ jobs:
           cmake --build build --config Release --target test_core NexusDrumTrigger
       - name: Rodar testes do nucleo de audio
         run: ctest --test-dir build -C Release --output-on-failure
-      - name: Empacotar
+      - name: Gerar instalador (Inno Setup)
         shell: pwsh
-        run: Compress-Archive -Path "build/NexusDrumTrigger_artefacts/Release/Nexus Drum Trigger.exe" -DestinationPath NexusDrumTrigger-Windows.zip
+        run: |
+          $v = (Select-String -Path CMakeLists.txt -Pattern 'VERSION (\d+\.\d+\.\d+)').Matches[0].Groups[1].Value
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" installer\NexusDrumTrigger.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem dist
       - uses: actions/upload-artifact@v4
         with:
           name: win
-          path: NexusDrumTrigger-Windows.zip
+          path: dist/NexusDrumTrigger-Setup.exe
   macos:
     runs-on: macos-latest
     steps:
@@ -32,15 +37,19 @@ jobs:
           cmake --build build --config Release --target test_core NexusDrumTrigger
       - name: Rodar testes do nucleo de audio
         run: ctest --test-dir build -C Release --output-on-failure
-      - name: Empacotar
+      - name: Gerar DMG (arrastar para Aplicativos)
         run: |
-          ditto -c -k --keepParent "build/NexusDrumTrigger_artefacts/Release/Nexus Drum Trigger.app" NexusDrumTrigger-macOS.zip
+          APP="build/NexusDrumTrigger_artefacts/Release/Nexus Drum Trigger.app"
+          codesign --force --deep --sign - "$APP"
+          mkdir -p dmg && cp -R "$APP" dmg/ && ln -s /Applications dmg/Aplicativos
+          hdiutil create -volname "Nexus Drum Trigger" -srcfolder dmg -ov -format UDZO NexusDrumTrigger-macOS.dmg
       - uses: actions/upload-artifact@v4
         with:
           name: mac
-          path: NexusDrumTrigger-macOS.zip
+          path: NexusDrumTrigger-macOS.dmg
   release:
     needs: [windows, macos]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -53,4 +62,4 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh release delete latest -y --cleanup-tag || true
-          gh release create latest dist/NexusDrumTrigger-Windows.zip dist/NexusDrumTrigger-macOS.zip --target ${{ github.sha }} --title "Nexus Drum Trigger" --notes "Windows: extraia o zip e abra o .exe. Mac: extraia o zip, clique com o botao direito no app e escolha Abrir."
+          gh release create latest dist/NexusDrumTrigger-Setup.exe dist/NexusDrumTrigger-macOS.dmg --target ${{ github.sha }} --title "Nexus Drum Trigger" --notes "Windows: baixe e execute NexusDrumTrigger-Setup.exe. Mac: abra o DMG e arraste o app para Aplicativos; na primeira vez, clique com o botao direito no app e escolha Abrir."
