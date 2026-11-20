@@ -67,7 +67,7 @@ const FactoryKit kKits[] = {
     {"Sala Grande",    "Bumbo Acústico 24\"", "Caixa Acústica 14\"", "Chimbal Acústico Meio-Aberto", "Tom Acústico 15\"", "Surdo Acústico 18\"", "Surdo Acústico 22\"", "Prato Ataque 17\"", "Prato Condução 22\"", 1.0f, 0.0f, 2.0f, 0.38f, 0.85f, 0.45f},
     {"Eletrônico 808", "Bumbo 808", "Caixa 909", "Chimbal Fechado", "Tom Agudo", "Tom Médio", "Tom Grave", "Prato Ataque", "Prato Condução (Ride)", 3.0f, -2.0f, 2.0f, 0.15f, 0.40f, 0.90f},
     {"Funk Seco",      "Bumbo Seco", "Caixa Seca", "Chimbal Fechado", "Tom Médio", "Tom Grave", "Tom Grave", "Prato Ataque", "Prato Condução (Ride)", 1.0f, -1.0f, 1.0f, 0.08f, 0.30f, 0.70f}};
-constexpr int kNumKits = 6;
+constexpr int kNumBuiltinKits = 6;
 
 // som reserva (sintetizado) quando o gravado não existir
 const char* fallbackFor(const std::string& n) {
@@ -514,6 +514,7 @@ MainComponent::MainComponent() {
     LookAndFeel::setDefaultLookAndFeel(&lnf);
 
     decodeFactorySounds();
+    buildKitList();
     engine.prepare(48000.0); // monta o banco de sons para a interface (refeito em prepareToPlay)
     addFactorySounds();
     loadCustomSounds();
@@ -664,7 +665,7 @@ File MainComponent::factoryDir() {
 }
 
 void MainComponent::decodeFactorySounds() {
-    factory.clear();
+    factory.clear(); factoryKits.clear();
     const auto root = factoryDir();
     if (!root.isDirectory()) return;
     AudioFormatManager fm; fm.registerBasicFormats();
@@ -672,6 +673,13 @@ void MainComponent::decodeFactorySounds() {
     packs.sort();
     for (auto& pack : packs) {
         const auto js = JSON::parse(pack.getChildFile("sons.json"));
+        if (auto* kl = js["kits"].getArray())
+            for (auto& k : *kl) {
+                auto s = [&k](const char* f) { return k[f].toString().toStdString(); };
+                auto fl = [&k](const char* f, double d) { return k.hasProperty(f) ? static_cast<float>(static_cast<double>(k[f])) : static_cast<float>(d); };
+                factoryKits.push_back({s("name"), js["kit"].toString().toStdString(), s("kick"), s("snare"), s("hat"), s("tom1"), s("tom2"), s("floor"), s("crash"), s("ride"),
+                                       fl("eqLow", 0), fl("eqMid", 0), fl("eqHigh", 0), fl("revWet", 0.12), fl("revRoom", 0.45), fl("blend", 0.6)});
+            }
         auto* list = js["sounds"].getArray();
         if (list == nullptr) continue;
         for (auto& item : *list) {
@@ -757,9 +765,19 @@ int MainComponent::findSound(const std::string& name) const {
     return 0;
 }
 
+void MainComponent::buildKitList() {
+    kits.clear();
+    for (int i = 0; i < kNumBuiltinKits; ++i) {
+        const auto& b = kKits[i];
+        kits.push_back({b.name, "", b.kick, b.snare, b.hat, b.tom1, b.tom2, b.floor, b.crash, b.ride, b.eqLow, b.eqMid, b.eqHigh, b.revWet, b.revRoom, b.blend});
+    }
+    for (auto& pk : factoryKits) kits.push_back(pk);
+}
+
 void MainComponent::applyKit(int index) {
+    if (index < 0 || index >= static_cast<int>(kits.size())) return;
     currentKit = index;
-    const auto& k = kKits[index];
+    const auto& k = kits[static_cast<size_t>(index)];
     auto& p = engine.params;
     const int snd[8] = {findSound(k.kick), findSound(k.snare), findSound(k.hat), findSound(k.tom1), findSound(k.tom2), findSound(k.floor), findSound(k.crash), findSound(k.ride)};
     for (int i = 0; i < nexus::kNumPads; ++i) p.pad[i].sound = snd[i];
@@ -767,25 +785,32 @@ void MainComponent::applyKit(int index) {
     for (int z = 0; z < nexus::kNumZones; ++z) p.zone[z].sound = zs[z];
     p.eqLowDb = k.eqLow; p.eqMidDb = k.eqMid; p.eqHighDb = k.eqHigh;
     p.reverbWet = k.revWet; p.reverbRoom = k.revRoom; p.blend = k.blend;
-    kitBtn.setButtonText(theme::u8(k.name));
+    kitBtn.setButtonText(String::fromUTF8(k.name.c_str()));
     p.previewSound = snd[0];
     refreshAll();
 }
 
 void MainComponent::stepKit(int delta) {
-    const int next = currentKit < 0 ? (delta > 0 ? 0 : kNumKits - 1) : (currentKit + delta + kNumKits) % kNumKits;
+    const int n = static_cast<int>(kits.size());
+    if (n == 0) return;
+    const int next = currentKit < 0 ? (delta > 0 ? 0 : n - 1) : (currentKit + delta + n) % n;
     applyKit(next);
 }
 
 void MainComponent::showKitMenu() {
     PopupMenu m;
-    m.addSectionHeader(theme::u8("Kits prontos"));
-    for (int i = 0; i < kNumKits; ++i) m.addItem(i + 1, theme::u8(kKits[i].name), true, i == currentKit);
+    String group = "?";
+    for (int i = 0; i < static_cast<int>(kits.size()); ++i) {
+        const auto& k = kits[static_cast<size_t>(i)];
+        const String g = k.group.empty() ? theme::u8("Kits prontos") : String::fromUTF8(k.group.c_str());
+        if (g != group) { m.addSectionHeader(g); group = g; }
+        m.addItem(i + 1, String::fromUTF8(k.name.c_str()), true, i == currentKit);
+    }
     m.addSeparator();
     m.addItem(100, theme::u8("Abrir kit salvo…"));
     m.addItem(101, theme::u8("Salvar kit…"));
     m.showMenuAsync(PopupMenu::Options().withTargetComponent(&kitBtn), [this](int id) {
-        if (id >= 1 && id <= kNumKits) applyKit(id - 1);
+        if (id >= 1 && id <= static_cast<int>(kits.size())) applyKit(id - 1);
         else if (id == 100) loadKit();
         else if (id == 101) saveKit();
     });

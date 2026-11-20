@@ -397,8 +397,11 @@ private:
             const Take& t = takes[(rrCounter[si]++) % takes.size()];
             dL = t.L.data(); dR = t.R.empty() ? nullptr : t.R.data(); len = t.L.size();
             // suaviza o salto entre camadas: dentro da camada, varia um pouco o volume
-            const float within = v * static_cast<float>(nl) - static_cast<float>(li);
-            gain *= 0.82f + 0.18f * std::min(1.0f, within);
+            if (nl < 3) gain *= vel; // poucas camadas: a força ainda controla o volume
+            else {
+                const float within = v * static_cast<float>(nl) - static_cast<float>(li);
+                gain *= 0.82f + 0.18f * std::min(1.0f, within);
+            }
         } else {
             gain *= vel;
         }

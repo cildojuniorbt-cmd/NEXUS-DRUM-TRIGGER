@@ -36,6 +36,9 @@ private:
     // sons de fábrica gravados (decodificados uma vez; o banco só guarda referência)
     struct FactorySound { std::string name, cat; int choke = 0; std::shared_ptr<const nexus::Sound::Layers> layers; double rate = 44100.0; };
     std::vector<FactorySound> factory;
+    struct KitDef { std::string name, group, kick, snare, hat, tom1, tom2, floor, crash, ride; float eqLow, eqMid, eqHigh, revWet, revRoom, blend; };
+    std::vector<KitDef> factoryKits, kits;
+    void buildKitList();
     void decodeFactorySounds();
     void addFactorySounds();
     static juce::File factoryDir();

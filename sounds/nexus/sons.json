@@ -1,0 +1,1143 @@
+{
+ "kit": "Kits Nexus",
+ "license": "Uso autorizado pelos autores para o Nexus Drum Trigger",
+ "sounds": [
+  {
+   "id": "kit1_kick",
+   "name": "Bumbo · Kit 1",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_snare",
+   "name": "Caixa · Kit 1",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_rim",
+   "name": "Caixa Aro · Kit 1",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_tom1",
+   "name": "Tom 1 · Kit 1",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_tom2",
+   "name": "Tom 2 · Kit 1",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_floor",
+   "name": "Surdo · Kit 1",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_hat",
+   "name": "Chimbal Fechado · Kit 1",
+   "category": "Chimbal",
+   "choke": 1,
+   "layers": 1
+  },
+  {
+   "id": "kit1_hato",
+   "name": "Chimbal Aberto · Kit 1",
+   "category": "Chimbal",
+   "choke": 1,
+   "layers": 1
+  },
+  {
+   "id": "kit1_hatp",
+   "name": "Chimbal Pedal · Kit 1",
+   "category": "Chimbal",
+   "choke": 1,
+   "layers": 1
+  },
+  {
+   "id": "kit1_crash",
+   "name": "Prato Ataque · Kit 1",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_ride",
+   "name": "Condução · Kit 1",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_ride2",
+   "name": "Condução 2 · Kit 1",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_china",
+   "name": "China · Kit 1",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit1_splash",
+   "name": "Splash · Kit 1",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit2_kick",
+   "name": "Bumbo · Kit 2",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit2_snare",
+   "name": "Caixa · Kit 2",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit2_snare2",
+   "name": "Caixa 2 · Kit 2",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit2_tom1",
+   "name": "Tom 1 · Kit 2",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit2_tom2",
+   "name": "Tom 2 · Kit 2",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit2_hato",
+   "name": "Chimbal Aberto · Kit 2",
+   "category": "Chimbal",
+   "choke": 1,
+   "layers": 1
+  },
+  {
+   "id": "kit2_hatp",
+   "name": "Chimbal Pedal · Kit 2",
+   "category": "Chimbal",
+   "choke": 1,
+   "layers": 1
+  },
+  {
+   "id": "kit2_crash",
+   "name": "Prato Ataque · Kit 2",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit3_kick",
+   "name": "Bumbo · Kit 3",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit3_snare",
+   "name": "Caixa · Kit 3",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit3_ghost",
+   "name": "Caixa Ghost · Kit 3",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit3_rim",
+   "name": "Caixa Aro · Kit 3",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit3_tom1",
+   "name": "Tom 1 · Kit 3",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit3_tom2",
+   "name": "Tom 2 · Kit 3",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit3_tom3",
+   "name": "Tom 3 · Kit 3",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit3_floor",
+   "name": "Surdo · Kit 3",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit3_floor2",
+   "name": "Surdo 2 · Kit 3",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_kick",
+   "name": "Bumbo · Kit 4",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_snare",
+   "name": "Caixa · Kit 4",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_snare2",
+   "name": "Caixa 2 · Kit 4",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_fx",
+   "name": "Caixa Efeito · Kit 4",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_rim",
+   "name": "Caixa Aro · Kit 4",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_tom1",
+   "name": "Tom 1 · Kit 4",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_tom2",
+   "name": "Tom 2 · Kit 4",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_tom3",
+   "name": "Tom 3 · Kit 4",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_floor",
+   "name": "Surdo · Kit 4",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_floor2",
+   "name": "Surdo 2 · Kit 4",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit4_floor3",
+   "name": "Surdo 3 · Kit 4",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit5_kick",
+   "name": "Bumbo · Kit 5",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit5_snare",
+   "name": "Caixa · Kit 5",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit5_tom1",
+   "name": "Tom 1 · Kit 5",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit5_tom2",
+   "name": "Tom 2 · Kit 5",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit5_tom3",
+   "name": "Tom 3 · Kit 5",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit5_floor",
+   "name": "Surdo · Kit 5",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit6_kick",
+   "name": "Bumbo · Kit 6",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit6_kick2",
+   "name": "Bumbo 2 · Kit 6",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit6_snare",
+   "name": "Caixa · Kit 6",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit6_perc",
+   "name": "Percussão · Kit 6",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit6_tom1",
+   "name": "Tom 1 · Kit 6",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit6_tom2",
+   "name": "Tom 2 · Kit 6",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit6_tom3",
+   "name": "Tom 3 · Kit 6",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit6_floor",
+   "name": "Surdo · Kit 6",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit6_floor2",
+   "name": "Surdo 2 · Kit 6",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit7_kick",
+   "name": "Bumbo · Kit 7",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit7_snare",
+   "name": "Caixa · Kit 7",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit7_tom1",
+   "name": "Tom 1 · Kit 7",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit7_tom2",
+   "name": "Tom 2 · Kit 7",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit7_tom3",
+   "name": "Tom 3 · Kit 7",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit7_floor",
+   "name": "Surdo · Kit 7",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit7_roto",
+   "name": "Rototom · Kit 7",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit8_kick",
+   "name": "Bumbo · Kit 8",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit8_kick2",
+   "name": "Bumbo 2 · Kit 8",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit8_snare",
+   "name": "Caixa · Kit 8",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit8_snare2",
+   "name": "Caixa 2 · Kit 8",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit8_tom1",
+   "name": "Tom 1 · Kit 8",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit8_tom2",
+   "name": "Tom 2 · Kit 8",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit8_tom3",
+   "name": "Tom 3 · Kit 8",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit8_floor",
+   "name": "Surdo · Kit 8",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit8_roto",
+   "name": "Rototom · Kit 8",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit9_kick",
+   "name": "Bumbo · Kit 9",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit9_snare",
+   "name": "Caixa · Kit 9",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit9_snare2",
+   "name": "Caixa 2 · Kit 9",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit9_tom1",
+   "name": "Tom 1 · Kit 9",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit9_tom2",
+   "name": "Tom 2 · Kit 9",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit9_tom3",
+   "name": "Tom 3 · Kit 9",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit9_floor",
+   "name": "Surdo · Kit 9",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit9_floor2",
+   "name": "Surdo 2 · Kit 9",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit9_floor3",
+   "name": "Surdo 3 · Kit 9",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit10_kick",
+   "name": "Bumbo · Kit 10",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit10_snare",
+   "name": "Caixa · Kit 10",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit10_tom1",
+   "name": "Tom 1 · Kit 10",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit10_tom2",
+   "name": "Tom 2 · Kit 10",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit10_floor",
+   "name": "Surdo · Kit 10",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit10_tom3",
+   "name": "Tom 3 · Kit 10",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_kick",
+   "name": "Bumbo · Kit 11",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_kick2",
+   "name": "Bumbo 2 · Kit 11",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_kick3",
+   "name": "Bumbo 3 · Kit 11",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_kick4",
+   "name": "Bumbo 4 · Kit 11",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_snare",
+   "name": "Caixa · Kit 11",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_snare2",
+   "name": "Caixa 2 · Kit 11",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_fx",
+   "name": "Caixa Efeito · Kit 11",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_snare3",
+   "name": "Caixa 3 · Kit 11",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_tom1",
+   "name": "Tom 1 · Kit 11",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_tom2",
+   "name": "Tom 2 · Kit 11",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_tom3",
+   "name": "Tom 3 · Kit 11",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_floor",
+   "name": "Surdo · Kit 11",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_floor2",
+   "name": "Surdo 2 · Kit 11",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit11_floor3",
+   "name": "Surdo 3 · Kit 11",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_kick",
+   "name": "Bumbo · Kit 12",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_kick2",
+   "name": "Bumbo 2 · Kit 12",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_kick3",
+   "name": "Bumbo 3 · Kit 12",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_kick4",
+   "name": "Bumbo 4 · Kit 12",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_kick5",
+   "name": "Bumbo 5 · Kit 12",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_snare",
+   "name": "Caixa · Kit 12",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_snare2",
+   "name": "Caixa 2 · Kit 12",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_fx",
+   "name": "Caixa Efeito · Kit 12",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_tom1",
+   "name": "Tom 1 · Kit 12",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_tom2",
+   "name": "Tom 2 · Kit 12",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_tom3",
+   "name": "Tom 3 · Kit 12",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_floor",
+   "name": "Surdo · Kit 12",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_floor2",
+   "name": "Surdo 2 · Kit 12",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_tom4",
+   "name": "Tom 4 · Kit 12",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_tom5",
+   "name": "Tom 5 · Kit 12",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_floor3",
+   "name": "Surdo 3 · Kit 12",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "kit12_floor4",
+   "name": "Surdo 4 · Kit 12",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo1",
+   "name": "Surdo de Marcação 1",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo2",
+   "name": "Surdo de Marcação 2",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo3",
+   "name": "Surdo de Marcação 3",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo4",
+   "name": "Surdo de Marcação 4",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo5",
+   "name": "Surdo de Marcação 5",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo6",
+   "name": "Surdo de Marcação 6",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo7",
+   "name": "Surdo de Marcação 7",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo8",
+   "name": "Surdo de Marcação 8",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo9",
+   "name": "Surdo de Marcação 9",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo10",
+   "name": "Surdo de Marcação 10",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo11",
+   "name": "Surdo de Marcação 11",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo12",
+   "name": "Surdo de Marcação 12",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo13",
+   "name": "Surdo de Marcação 13",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  },
+  {
+   "id": "surdos_surdo14",
+   "name": "Surdo de Marcação 14",
+   "category": "Percussão",
+   "choke": 0,
+   "layers": 1
+  }
+ ],
+ "kits": [
+  {
+   "name": "Kit 1",
+   "kick": "Bumbo · Kit 1",
+   "snare": "Caixa · Kit 1",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 1",
+   "tom2": "Tom 2 · Kit 1",
+   "floor": "Surdo · Kit 1",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.0,
+   "revWet": 0.12,
+   "revRoom": 0.45,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 2",
+   "kick": "Bumbo · Kit 2",
+   "snare": "Caixa · Kit 2",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 2",
+   "tom2": "Tom 2 · Kit 2",
+   "floor": "Tom 2 · Kit 2",
+   "crash": "Prato Ataque · Kit 2",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.5,
+   "revWet": 0.1,
+   "revRoom": 0.4,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 3",
+   "kick": "Bumbo · Kit 3",
+   "snare": "Caixa · Kit 3",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 3",
+   "tom2": "Tom 2 · Kit 3",
+   "floor": "Surdo · Kit 3",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.0,
+   "revWet": 0.12,
+   "revRoom": 0.45,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 4",
+   "kick": "Bumbo · Kit 4",
+   "snare": "Caixa · Kit 4",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 4",
+   "tom2": "Tom 2 · Kit 4",
+   "floor": "Surdo · Kit 4",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.0,
+   "revWet": 0.1,
+   "revRoom": 0.4,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 5",
+   "kick": "Bumbo · Kit 5",
+   "snare": "Caixa · Kit 5",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 5",
+   "tom2": "Tom 2 · Kit 5",
+   "floor": "Surdo · Kit 5",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 2.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.0,
+   "revWet": 0.14,
+   "revRoom": 0.5,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 6",
+   "kick": "Bumbo · Kit 6",
+   "snare": "Caixa · Kit 6",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 6",
+   "tom2": "Tom 2 · Kit 6",
+   "floor": "Surdo · Kit 6",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.0,
+   "revWet": 0.1,
+   "revRoom": 0.45,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 7",
+   "kick": "Bumbo · Kit 7",
+   "snare": "Caixa · Kit 7",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 7",
+   "tom2": "Tom 2 · Kit 7",
+   "floor": "Surdo · Kit 7",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.0,
+   "revWet": 0.16,
+   "revRoom": 0.55,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 8",
+   "kick": "Bumbo · Kit 8",
+   "snare": "Caixa · Kit 8",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 8",
+   "tom2": "Tom 2 · Kit 8",
+   "floor": "Surdo · Kit 8",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.5,
+   "revWet": 0.2,
+   "revRoom": 0.6,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 9",
+   "kick": "Bumbo · Kit 9",
+   "snare": "Caixa · Kit 9",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 9",
+   "tom2": "Tom 2 · Kit 9",
+   "floor": "Surdo · Kit 9",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.0,
+   "revWet": 0.14,
+   "revRoom": 0.5,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 10",
+   "kick": "Bumbo · Kit 10",
+   "snare": "Caixa · Kit 10",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 10",
+   "tom2": "Tom 2 · Kit 10",
+   "floor": "Surdo · Kit 10",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.0,
+   "revWet": 0.12,
+   "revRoom": 0.45,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 11",
+   "kick": "Bumbo · Kit 11",
+   "snare": "Caixa · Kit 11",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 11",
+   "tom2": "Tom 2 · Kit 11",
+   "floor": "Surdo · Kit 11",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 2.0,
+   "eqMid": -1.0,
+   "eqHigh": 2.0,
+   "revWet": 0.1,
+   "revRoom": 0.4,
+   "blend": 0.6
+  },
+  {
+   "name": "Kit 12",
+   "kick": "Bumbo · Kit 12",
+   "snare": "Caixa · Kit 12",
+   "hat": "Chimbal Fechado · Kit 1",
+   "tom1": "Tom 1 · Kit 12",
+   "tom2": "Tom 2 · Kit 12",
+   "floor": "Surdo · Kit 12",
+   "crash": "Prato Ataque · Kit 1",
+   "ride": "Condução · Kit 1",
+   "eqLow": 1.0,
+   "eqMid": 0.0,
+   "eqHigh": 1.0,
+   "revWet": 0.12,
+   "revRoom": 0.45,
+   "blend": 0.6
+  }
+ ]
+}

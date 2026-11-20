@@ -45,4 +45,5 @@ Sem placa de som/ASIO SDK o JUCE usa WASAPI no Windows; para ASIO defina `JUCE_A
 ## v0.4.3 · Sons acústicos gravados
 - 16 sons de bateria acústica gravada (bumbo 24", caixa 14" com rimshot e aro lateral, chimbal fechado/meio-aberto/aberto/pedal, 4 tons, ataque, condução, cúpula e china), cada um com **várias camadas de força** e **variações** que se alternam (sem efeito "metralhadora"), em estéreo.
 - Kits prontos novos: Acústico Nexus, Rock de Arena, Estúdio Seco e Sala Grande (os eletrônicos continuam).
+- **Kits Nexus 1 a 12** + surdos de marcação: 133 sons de replace/samples de bateria brasileira (sertanejo, forró, piseiro, gospel…), autorizados pelos autores. Os kits ficam em `sounds/nexus/sons.json` e aparecem no seletor de kits.
 - Origem dos sons: *Big Rusty Drums*, Karoryfer Samples, licença CC0 1.0 (domínio público). Veja `sounds/rusty/CREDITOS.txt`.
