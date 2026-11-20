@@ -45,6 +45,15 @@ public:
             2 * ((A - 1) - (A + 1) * c), (A + 1) - (A - 1) * c - beta);
     }
 
+    // Resposta de magnitude (dB) na frequência f - usada para desenhar a curva do EQ.
+    double magnitudeDb(double fs, double f) const {
+        const double w = 2.0 * kPi * f / fs;
+        const double c1 = std::cos(w), s1 = std::sin(w), c2 = std::cos(2 * w), s2 = std::sin(2 * w);
+        const double nr = b0 + b1 * c1 + b2 * c2, ni = -(b1 * s1 + b2 * s2);
+        const double dr = 1 + a1 * c1 + a2 * c2, di = -(a1 * s1 + a2 * s2);
+        return 10.0 * std::log10((nr * nr + ni * ni) / (dr * dr + di * di) + 1e-20);
+    }
+
     inline float process(float xf) {
         const double x = xf;
         const double y = b0 * x + z1;

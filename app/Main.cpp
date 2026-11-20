@@ -14,12 +14,12 @@ public:
     class MainWindow : public juce::DocumentWindow {
     public:
         explicit MainWindow(const juce::String& name)
-            : DocumentWindow(name, juce::Colour(0xff14161a), DocumentWindow::allButtons) {
+            : DocumentWindow(name, juce::Colour(0xff070a09), DocumentWindow::allButtons) {
             setUsingNativeTitleBar(true);
             setContentOwned(new MainComponent(), true);
             setResizable(true, true);
-            setResizeLimits(980, 620, 2400, 1400);
-            centreWithSize(1080, 700);
+            setResizeLimits(1100, 740, 2600, 1500);
+            centreWithSize(1280, 860);
             setVisible(true);
         }
         void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
