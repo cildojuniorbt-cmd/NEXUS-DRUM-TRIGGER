@@ -11,12 +11,14 @@ namespace nexus {
 constexpr int kNumPads = 8;    // módulo virtual: até 8 pads, cada um ligado a uma entrada da interface
 constexpr int kNumZones = 3;   // EAD: bumbo / caixa / chimbal separados por faixa de frequência
 constexpr int kMaxInputs = 8;
+constexpr int kMaxOutputs = 8;
 
 enum class Mode : int { Module = 0, Hybrid = 1 };
 
 // Parâmetros editáveis em tempo real (a interface escreve, o áudio lê).
 struct PadParams {
     std::atomic<int> sound{0};
+    std::atomic<int> outRoute{0};            // 0 = mix estéreo; 1..8 = saída independente (1 = só L, 2 = só R, 3..8 = canais extras)
     std::atomic<int> inputChannel{0};        // entrada da interface (0 = entrada 1) - só no módulo virtual
     std::atomic<float> level{1.0f};          // 0..1.5
     std::atomic<float> pitchSemis{0.0f};     // -12..+12
@@ -104,7 +106,8 @@ public:
     SoundBank& soundBank() { return bank; }
 
     // inputs: um ponteiro por canal de entrada da interface (nIn canais). Saída estéreo.
-    void processBlock(const float* const* inputs, int nIn, float* outL, float* outR, int n) {
+    // extra: buffers das saídas 3..8 (kMaxOutputs-2 ponteiros; pode ser nullptr). Os sons com saída "1" e "2" vão para L e R.
+    void processBlock(const float* const* inputs, int nIn, float* outL, float* outR, int n, float* const* extra = nullptr) {
         const Mode mode = static_cast<Mode>(params.mode.load(std::memory_order_relaxed));
         const bool hybrid = mode == Mode::Hybrid;
         nIn = std::min(nIn, kMaxInputs);
@@ -171,7 +174,8 @@ public:
 
             // 2) sons eletrônicos
             float eL = 0.0f, eR = 0.0f;
-            renderVoices(eL, eR);
+            float bus[kMaxOutputs] = {};
+            renderVoices(eL, eR, bus);
             eL *= elec; eR *= elec;
 
             // 3) microfones acústicos (só na aba EAD): Mic 1 = esquerda, Mic 2 = direita
@@ -192,6 +196,10 @@ public:
             reverb.process(L, R, wL, wR);
             L = softLimit((L + wL) * master);
             R = softLimit((R + wR) * master);
+            // saídas independentes (sem reverb): 1 -> L, 2 -> R, 3..8 -> canais extras
+            L = softLimit(L + softLimit(bus[0] * elec * master));
+            R = softLimit(R + softLimit(bus[1] * elec * master));
+            if (extra) for (int k = 2; k < kMaxOutputs; ++k) if (extra[k - 2]) extra[k - 2][i] = softLimit(bus[k] * elec * master);
             outL[i] = L; outR[i] = R;
             outMeter = std::max(outMeter * 0.9995f, std::max(std::fabs(L), std::fabs(R)));
         }
@@ -214,7 +222,7 @@ private:
         const std::vector<float>* data = nullptr;
         double pos = 0.0, inc = 1.0;
         float gainL = 0.0f, gainR = 0.0f;
-        int choke = 0;
+        int choke = 0, route = 0;
         float fade = 1.0f, fadeStep = 0.0f; // fadeStep>0: em fade-out
         unsigned long long age = 0;
         bool active = false;
@@ -224,12 +232,12 @@ private:
         const float sens = pp.velocitySens.load();
         const float vel = 1.0f - sens + sens * velocity; // sens=0 -> sempre 1.0
         const float pitch = std::pow(2.0f, pp.pitchSemis.load() / 12.0f);
-        startVoice(pp.sound.load(), vel * pp.level.load(), pitch, pp.pan.load());
+        startVoice(pp.sound.load(), vel * pp.level.load(), pitch, pp.pan.load(), std::min(kMaxOutputs, std::max(0, pp.outRoute.load())));
         status.lastVelocity[statusIdx].store(velocity, std::memory_order_relaxed);
         status.hitCount[statusIdx].fetch_add(1u, std::memory_order_relaxed);
     }
 
-    void startVoice(int soundIdx, float gain, float pitch, float pan) {
+    void startVoice(int soundIdx, float gain, float pitch, float pan, int route = 0) {
         if (bank.size() == 0) return;
         const Sound& s = bank.get(soundIdx);
         if (s.chokeGroup > 0) // chimbal: novo golpe corta o anterior
@@ -241,10 +249,12 @@ private:
         const float ang = (p + 1.0f) * 0.25f * static_cast<float>(kPi);
         slot->data = &s.data; slot->pos = 0.0; slot->inc = pitch;
         slot->gainL = gain * std::cos(ang) * 1.414f; slot->gainR = gain * std::sin(ang) * 1.414f;
+        slot->route = route;
+        if (route > 0) { slot->gainL = slot->gainR = gain; }
         slot->choke = s.chokeGroup; slot->fade = 1.0f; slot->fadeStep = 0.0f; slot->age = ++voiceCounter; slot->active = true;
     }
 
-    inline void renderVoices(float& L, float& R) {
+    inline void renderVoices(float& L, float& R, float* bus) {
         for (auto& v : voices) {
             if (!v.active) continue;
             const auto& d = *v.data;
@@ -252,7 +262,8 @@ private:
             if (i0 + 1 >= d.size()) { v.active = false; continue; }
             const float fr = static_cast<float>(v.pos - static_cast<double>(i0));
             const float s = (d[i0] * (1.0f - fr) + d[i0 + 1] * fr) * v.fade;
-            L += s * v.gainL; R += s * v.gainR;
+            if (v.route > 0) bus[v.route - 1] += s * v.gainL;
+            else { L += s * v.gainL; R += s * v.gainR; }
             v.pos += v.inc;
             if (v.fadeStep > 0.0f) { v.fade -= v.fadeStep; if (v.fade <= 0.0f) v.active = false; }
         }

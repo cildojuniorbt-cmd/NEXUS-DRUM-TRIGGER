@@ -42,6 +42,7 @@ private:
     std::vector<std::vector<float>> inBuf;
     const float* inPtr[nexus::kMaxInputs] = {};
     std::vector<float> outL, outR;
+    std::vector<std::vector<float>> outX;
 
     std::unique_ptr<PageBase> pages[5];
     int currentPage = 0, currentKit = -1;

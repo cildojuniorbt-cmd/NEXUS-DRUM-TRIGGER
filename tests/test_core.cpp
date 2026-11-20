@@ -247,6 +247,25 @@ int main() {
         CHECK(r.hits[1] == 1 && r.hits[2] == 1 && r.outPeak > 0.2f, "botões de teste de pad e de zona tocam o som");
     }
 
+    { // saídas independentes: bumbo só no L, caixa só no R, tom no canal 4
+        Engine e; setup(e);
+        e.params.pad[0].outRoute = 1; e.params.pad[1].outRoute = 2; e.params.pad[3].outRoute = 4;
+        const size_t n = 9600;
+        std::vector<float> in(n, 0.0f), L(n), R(n), x2(n), x3(n);
+        const float* ins[1] = {in.data()};
+        float* extra[6] = {x2.data(), x3.data(), nullptr, nullptr, nullptr, nullptr};
+        auto energy = [](const std::vector<float>& v) { double a = 0; for (float f : v) a += f * f; return a; };
+        e.params.manualHit[0] = 900;
+        e.processBlock(ins, 1, L.data(), R.data(), static_cast<int>(n), extra);
+        CHECK(energy(L) > 1.0 && energy(R) < 1e-9, "bumbo na saída 1 sai só no canal L");
+        e.params.manualHit[1] = 900;
+        e.processBlock(ins, 1, L.data(), R.data(), static_cast<int>(n), extra);
+        CHECK(energy(R) > 1.0, "caixa na saída 2 sai no canal R");
+        e.params.manualHit[3] = 900;
+        e.processBlock(ins, 1, L.data(), R.data(), static_cast<int>(n), extra);
+        CHECK(energy(x3) > 1.0 && energy(x2) < 1e-9, "tom na saída 4 sai só no 4º canal da interface");
+    }
+
     std::printf("\n%s (%d falha%s)\n", failures ? "TESTES FALHARAM" : "TODOS OS TESTES PASSARAM", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }

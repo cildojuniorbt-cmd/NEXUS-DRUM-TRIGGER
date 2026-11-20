@@ -142,6 +142,7 @@ public:
         const bool few = maxPads <= 2;
         padsLbl.setVisible(!few); padsMinus.setVisible(!few); padsPlus.setVisible(!few);
         det.maxInputs = maxPads;
+        det.maxOutputs = maxPads <= 2 ? 2 : nexus::kMaxOutputs;
         for (int i = 0; i < nexus::kNumPads; ++i) {
             padBtn[i].setVisible(i < maxPads);
             padBtn[i].setClickingTogglesState(true);
@@ -181,7 +182,7 @@ public:
         auto r = getLocalBounds();
         auto right = r.removeFromRight(300); r.removeFromRight(10);
         input.setBounds(right.removeFromTop(150)); right.removeFromTop(10);
-        det.setBounds(right.removeFromTop(310)); right.removeFromTop(10);
+        det.setBounds(right.removeFromTop(350)); right.removeFromTop(10);
         lib.setBounds(right);
         auto D = r.removeFromBottom(150); r.removeFromBottom(10);
         auto C = r.removeFromBottom(150); r.removeFromBottom(10);
@@ -276,7 +277,7 @@ public:
         auto r = getLocalBounds();
         auto right = r.removeFromRight(300); r.removeFromRight(10);
         input.setBounds(right.removeFromTop(150)); right.removeFromTop(10);
-        det.setBounds(right.removeFromTop(310)); right.removeFromTop(10);
+        det.setBounds(right.removeFromTop(350)); right.removeFromTop(10);
         lib.setBounds(right);
         auto D = r.removeFromBottom(140); r.removeFromBottom(8);
         auto C = r.removeFromBottom(150); r.removeFromBottom(8);
@@ -305,12 +306,12 @@ private:
 // ============================================================================
 class MainComponent::AudioPage : public PageBase {
 public:
-    explicit AudioPage(AudioDeviceManager& dm) : card(theme::u8("Áudio · Dispositivos")), selector(dm, 0, 8, 0, 2, false, false, false, false) {
+    explicit AudioPage(AudioDeviceManager& dm) : card(theme::u8("Áudio · Dispositivos")), selector(dm, 0, 8, 0, 8, false, false, false, false) {
         addAndMakeVisible(card);
         card.addAndMakeVisible(selector);
         help.setText(theme::u8("Como ligar: use uma interface de áudio e escolha o driver dela acima (no Windows, ASIO ou WASAPI de baixa latência; no Mac, CoreAudio). Ative as entradas que for usar (até 8). "
                                "No Trigger (módulo virtual), cada pad escolhe a entrada que ouve; com 2 entradas você usa 2 pads, com 8 usa a bateria inteira. No EAD, as entradas 1 e 2 são o par estéreo de microfones. "
-                               "Triggers/pads piezo (ex.: Roland) entram na entrada de instrumento (Hi-Z) com o phantom power DESLIGADO. Para tocar ao vivo, deixe o buffer em 64 a 128 amostras. Se ouvir estalos, aumente o buffer."), dontSendNotification);
+                               "Triggers/pads piezo (ex.: Roland) entram na entrada de instrumento (Hi-Z) com o phantom power DESLIGADO. Saídas: em cada pad você escolhe se ele sai no mix estéreo ou numa saída própria (Trigger: só L ou só R, para separar na mesa; Bateria eletrônica: até 8 saídas, uma por peça, para gravar separado). Ative as saídas da interface aqui em cima. Para tocar ao vivo, deixe o buffer em 64 a 128 amostras. Se ouvir estalos, aumente o buffer."), dontSendNotification);
         help.setFont(theme::font(13.5f)); help.setColour(Label::textColourId, theme::muted); help.setJustificationType(Justification::topLeft);
         card.addAndMakeVisible(help);
     }
@@ -318,7 +319,7 @@ public:
     void resized() override {
         card.setBounds(getLocalBounds());
         auto r = card.content();
-        help.setBounds(r.removeFromBottom(110));
+        help.setBounds(r.removeFromBottom(150));
         selector.setBounds(r);
     }
 private:
@@ -468,9 +469,9 @@ MainComponent::MainComponent() {
     setSize(1280, 860);
 
     if (RuntimePermissions::isRequired(RuntimePermissions::recordAudio) && !RuntimePermissions::isGranted(RuntimePermissions::recordAudio))
-        RuntimePermissions::request(RuntimePermissions::recordAudio, [this](bool granted) { setAudioChannels(granted ? 8 : 0, 2); });
+        RuntimePermissions::request(RuntimePermissions::recordAudio, [this](bool granted) { setAudioChannels(granted ? 8 : 0, 8); });
     else
-        setAudioChannels(8, 2);
+        setAudioChannels(8, 8);
 
     startTimerHz(30);
 }
@@ -484,7 +485,7 @@ MainComponent::~MainComponent() {
 
 void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate) {
     const size_t cap = static_cast<size_t>(jmax(256, samplesPerBlockExpected));
-    inBuf.assign(nexus::kMaxInputs, std::vector<float>(cap, 0.0f)); outL.assign(cap, 0.0f); outR.assign(cap, 0.0f);
+    inBuf.assign(nexus::kMaxInputs, std::vector<float>(cap, 0.0f)); outX.assign(nexus::kMaxOutputs - 2, std::vector<float>(cap, 0.0f)); outL.assign(cap, 0.0f); outR.assign(cap, 0.0f);
     currentFs = sampleRate;
     engine.prepare(sampleRate);
     loadCustomSounds();
@@ -509,11 +510,14 @@ void MainComponent::getNextAudioBlock(const AudioSourceChannelInfo& info) {
             else inPtr[c] = nullptr;
         }
 
-        engine.processBlock(inPtr, use, outL.data(), outR.data(), n);
+        float* extra[nexus::kMaxOutputs - 2] = {};
+        for (int c = 2; c < nexus::kMaxOutputs; ++c) { if (c < nCh) { auto& v = outX[static_cast<size_t>(c - 2)]; FloatVectorOperations::clear(v.data(), n); extra[c - 2] = v.data(); } }
+        engine.processBlock(inPtr, use, outL.data(), outR.data(), n, extra);
 
         for (int ch = 0; ch < nCh; ++ch) {
             if (ch == 0) FloatVectorOperations::copy(buf->getWritePointer(0, at), outL.data(), n);
             else if (ch == 1) FloatVectorOperations::copy(buf->getWritePointer(1, at), outR.data(), n);
+            else if (ch < nexus::kMaxOutputs) FloatVectorOperations::copy(buf->getWritePointer(ch, at), outX[static_cast<size_t>(ch - 2)].data(), n);
             else FloatVectorOperations::clear(buf->getWritePointer(ch, at), n);
         }
         if (nCh == 1) {

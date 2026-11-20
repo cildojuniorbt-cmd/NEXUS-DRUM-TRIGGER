@@ -156,6 +156,7 @@ private:
 class DetectionCard : public Card {
 public:
     int maxInputs = nexus::kMaxInputs;
+    int maxOutputs = nexus::kMaxOutputs;
     bool zone = false;   // true = editar uma zona do EAD em vez de um pad
     DetectionCard(nexus::Engine& e, std::function<void()> changed)
         : Card("Detecção (Trigger)"), engine(e),
@@ -168,6 +169,11 @@ public:
         for (int i = 1; i <= nexus::kMaxInputs; ++i) inSel.addItem(theme::u8("Entrada ") + juce::String(i), i);
         inSel.onChange = [this, changed] { if (!zone && inSel.getSelectedId() > 0) { pp(engine, zone, pad).inputChannel = inSel.getSelectedId() - 1; changed(); } };
         addAndMakeVisible(inSel); addAndMakeVisible(inLbl);
+        outSel.onChange = [this, changed] { if (!zone && outSel.getSelectedId() > 0) { pp(engine, zone, pad).outRoute = outSel.getSelectedId() - 1; changed(); } };
+        addAndMakeVisible(outSel); addAndMakeVisible(outLbl);
+        outLbl.setText(theme::u8("Sai em"), juce::dontSendNotification);
+        outLbl.setFont(theme::font(13.0f, true)); outLbl.setColour(juce::Label::textColourId, theme::muted);
+        fillOut();
         inLbl.setText(theme::u8("Ouve a"), juce::dontSendNotification);
         inLbl.setFont(theme::font(13.0f, true)); inLbl.setColour(juce::Label::textColourId, theme::muted);
         rebind();
@@ -179,7 +185,16 @@ public:
         setTitle(theme::u8("Detecção · ") + theme::u8(zone ? zn[p] : names[p]));
         refresh();
     }
+    void fillOut() {
+        outSel.clear(juce::dontSendNotification);
+        outSel.addItem(theme::u8("Estéreo (mix L+R)"), 1);
+        for (int i = 1; i <= maxOutputs; ++i)
+            outSel.addItem(theme::u8("Saída ") + juce::String(i) + (maxOutputs == 2 ? (i == 1 ? " (somente L)" : " (somente R)") : (i == 1 ? " (L)" : i == 2 ? " (R)" : "")), i + 1);
+    }
     void refresh() {
+        outSel.setVisible(!zone); outLbl.setVisible(!zone);
+        if (outSel.getNumItems() != maxOutputs + 1) fillOut();
+        if (!zone) outSel.setSelectedId(juce::jmin(maxOutputs, pp(engine, zone, pad).outRoute.load()) + 1, juce::dontSendNotification);
         for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->refresh();
         inSel.setVisible(!zone); inLbl.setVisible(!zone);
         if (inSel.getNumItems() != nexus::kMaxInputs) {}
@@ -194,7 +209,10 @@ public:
             auto row = r.removeFromTop(32);
             inLbl.setBounds(row.removeFromLeft(70));
             inSel.setBounds(row.reduced(0, 2));
-            r.removeFromTop(4);
+            auto row2 = r.removeFromTop(32);
+            outLbl.setBounds(row2.removeFromLeft(70));
+            outSel.setBounds(row2.reduced(0, 2));
+            r.removeFromTop(2);
         }
         const int h = juce::jlimit(34, 48, r.getHeight() / 5);
         for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->setBounds(r.removeFromTop(h));
@@ -211,8 +229,8 @@ private:
     nexus::Engine& engine;
     int pad = 0;
     BarSlider sens, thr, retrig, hp, lp;
-    juce::ComboBox inSel;
-    juce::Label inLbl;
+    juce::ComboBox inSel, outSel;
+    juce::Label inLbl, outLbl;
 };
 
 // ---------------------------------------------------------------- Som do pad (nome + onda + play)
