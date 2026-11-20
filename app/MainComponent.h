@@ -25,6 +25,7 @@ private:
     void showPage(int index);
     void refreshAll();
     void applyKit(int index);
+    int findSound(const std::string& name) const;
     void stepKit(int delta);
     void showKitMenu();
     void applyTheme();
@@ -32,6 +33,12 @@ private:
     void loadKit();
     juce::File dataDir() const;
     void loadCustomSounds();
+    // sons de fábrica gravados (decodificados uma vez; o banco só guarda referência)
+    struct FactorySound { std::string name, cat; int choke = 0; std::shared_ptr<const nexus::Sound::Layers> layers; double rate = 44100.0; };
+    std::vector<FactorySound> factory;
+    void decodeFactorySounds();
+    void addFactorySounds();
+    static juce::File factoryDir();
     void importSounds();
     int loadWavInto(const juce::File& f);
     double currentFs = 48000.0;

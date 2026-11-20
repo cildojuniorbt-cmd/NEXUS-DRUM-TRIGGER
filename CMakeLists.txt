@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(NexusDrumTrigger VERSION 0.4.2 LANGUAGES C CXX)
+project(NexusDrumTrigger VERSION 0.4.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,7 +37,17 @@ if(NEXUS_BUILD_APP)
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_APPLICATION_NAME_STRING="Nexus Drum Trigger"
-    JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}")
+    JUCE_APPLICATION_VERSION_STRING="${PROJECT_VERSION}"
+    NDT_SOURCE_SOUNDS="${CMAKE_CURRENT_SOURCE_DIR}/sounds")
+
+  # sons de fábrica gravados (FLAC): ao lado do .exe (Windows) ou dentro do .app (Mac)
+  if(APPLE)
+    set(NDT_SOUNDS_DEST "$<TARGET_BUNDLE_CONTENT_DIR:NexusDrumTrigger>/Resources/Sounds")
+  else()
+    set(NDT_SOUNDS_DEST "$<TARGET_FILE_DIR:NexusDrumTrigger>/Sounds")
+  endif()
+  add_custom_command(TARGET NexusDrumTrigger POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/sounds" "${NDT_SOUNDS_DEST}")
 
   target_include_directories(NexusDrumTrigger PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

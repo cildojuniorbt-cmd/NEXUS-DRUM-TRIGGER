@@ -1,0 +1,119 @@
+{
+ "kit": "Big Rusty Drums",
+ "author": "Karoryfer Samples",
+ "license": "CC0 1.0",
+ "sounds": [
+  {
+   "id": "bumbo",
+   "name": "Bumbo Acústico 24\"",
+   "category": "Bumbo",
+   "choke": 0,
+   "layers": 14
+  },
+  {
+   "id": "caixa",
+   "name": "Caixa Acústica 14\"",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 10
+  },
+  {
+   "id": "caixa_aro",
+   "name": "Caixa Rimshot",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 6
+  },
+  {
+   "id": "caixa_lateral",
+   "name": "Caixa Aro Lateral",
+   "category": "Caixa",
+   "choke": 0,
+   "layers": 4
+  },
+  {
+   "id": "chimbal_f",
+   "name": "Chimbal Acústico Fechado",
+   "category": "Chimbal",
+   "choke": 1,
+   "layers": 6
+  },
+  {
+   "id": "chimbal_meio",
+   "name": "Chimbal Acústico Meio-Aberto",
+   "category": "Chimbal",
+   "choke": 1,
+   "layers": 4
+  },
+  {
+   "id": "chimbal_a",
+   "name": "Chimbal Acústico Aberto",
+   "category": "Chimbal",
+   "choke": 1,
+   "layers": 6
+  },
+  {
+   "id": "chimbal_pe",
+   "name": "Chimbal Pedal",
+   "category": "Chimbal",
+   "choke": 1,
+   "layers": 5
+  },
+  {
+   "id": "tom14",
+   "name": "Tom Acústico 14\"",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 6
+  },
+  {
+   "id": "tom15",
+   "name": "Tom Acústico 15\"",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 7
+  },
+  {
+   "id": "tom18",
+   "name": "Surdo Acústico 18\"",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 8
+  },
+  {
+   "id": "tom22",
+   "name": "Surdo Acústico 22\"",
+   "category": "Tom",
+   "choke": 0,
+   "layers": 7
+  },
+  {
+   "id": "ataque17",
+   "name": "Prato Ataque 17\"",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 5
+  },
+  {
+   "id": "conducao22",
+   "name": "Prato Condução 22\"",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 10
+  },
+  {
+   "id": "cupula22",
+   "name": "Condução Cúpula",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 4
+  },
+  {
+   "id": "china18",
+   "name": "Prato China 18\"",
+   "category": "Prato",
+   "choke": 0,
+   "layers": 5
+  }
+ ]
+}

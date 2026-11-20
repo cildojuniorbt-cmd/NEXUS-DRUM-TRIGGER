@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <memory>
 #include "Biquad.h"
 #include <algorithm>
 #include <cmath>
@@ -9,11 +10,18 @@
 
 namespace nexus {
 
+// Uma gravação (estéreo; R vazio = mono).
+struct Take { std::vector<float> L, R; };
+
 struct Sound {
     std::string name;
     std::string category;
     int chokeGroup = 0; // >0: sons do mesmo grupo se cortam (chimbal)
-    std::vector<float> data;
+    std::vector<float> data;                 // mono (sons sintetizados; nos gravados, só para desenhar a onda)
+    using Layers = std::vector<std::vector<Take>>;
+    std::shared_ptr<const Layers> layers;    // gravados: camadas de força (fraca -> forte), cada uma com variações (compartilhado, sem cópia)
+    double rate = 1.0;                       // taxa da gravação / taxa do motor
+    bool sampled() const { return layers && !layers->empty(); }
 };
 
 // Banco de sons sintetizados (gerados no código; sem arquivos externos).
@@ -27,6 +35,20 @@ public:
     int addCustom(const std::string& name, std::vector<float> data) {
         if (data.size() < 64 || static_cast<int>(sounds.size()) >= kMaxSounds) return -1;
         add(name.c_str(), "Meus sons", 0, std::move(data));
+        return static_cast<int>(sounds.size()) - 1;
+    }
+
+    // Som gravado (camadas de força x variações). srcRate = taxa das gravações.
+    int addSampled(const std::string& name, const std::string& cat, int choke, std::shared_ptr<const Sound::Layers> layers, double srcRate, double fs) {
+        if (!layers || layers->empty() || static_cast<int>(sounds.size()) >= kMaxSounds) return -1;
+        for (auto& l : *layers) if (l.empty() || l.front().L.size() < 2) return -1;
+        Sound s; s.name = name; s.category = cat; s.chokeGroup = choke; s.rate = srcRate / fs;
+        const Take& top = layers->back().front();
+        s.data.resize(top.L.size());
+        for (size_t i = 0; i < top.L.size(); ++i) s.data[i] = top.R.empty() ? top.L[i] : 0.5f * (top.L[i] + top.R[i]);
+        s.layers = std::move(layers);
+        sounds.push_back(std::move(s));
+        count.store(static_cast<int>(sounds.size()), std::memory_order_release);
         return static_cast<int>(sounds.size()) - 1;
     }
 

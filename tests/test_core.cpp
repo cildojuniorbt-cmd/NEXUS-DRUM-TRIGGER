@@ -367,6 +367,28 @@ int main() {
         CHECK(rb.finite && rb.outPeak < ra.outPeak * 0.9f, "EQ por peça muda só o som daquela peça");
     }
 
+    { // sons gravados: camada pela força, variações alternadas, estéreo
+        Engine e; setup(e);
+        auto L = std::make_shared<Sound::Layers>();
+        for (int l = 0; l < 3; ++l) {
+            std::vector<Take> takes;
+            for (int r = 0; r < 2; ++r) {
+                Take t; const float a = 0.2f + 0.3f * static_cast<float>(l) + 0.02f * static_cast<float>(r);
+                t.L.assign(4800, a); t.R.assign(4800, a * 0.5f); takes.push_back(t);
+            }
+            L->push_back(takes);
+        }
+        const int idx = e.soundBank().addSampled("Teste", "Teste", 0, L, FS, FS);
+        CHECK(idx >= 16 && e.soundBank().get(idx).sampled(), "som gravado entra no banco");
+        e.params.pad[0].sound = idx; e.params.pad[0].pan = 0.0f; e.params.reverbWet = 0.0f;
+        auto peakAt = [&](int vel) { e.params.manualHit[0] = vel; Run r = run(e, silence(2, 2400)); return std::make_pair(r.peakL, r.peakR); };
+        const auto soft = peakAt(100), hard = peakAt(1000);
+        CHECK(hard.first > soft.first * 2.0f, "batida forte usa a camada forte (mais alta)");
+        CHECK(hard.second < hard.first * 0.7f, "som gravado sai em estéreo (L e R diferentes)");
+        const auto h2 = peakAt(1000);
+        CHECK(std::fabs(h2.first - hard.first) > 1e-4f, "batidas seguidas alternam as variações (round robin)");
+    }
+
     std::printf("\n%s (%d falha%s)\n", failures ? "TESTES FALHARAM" : "TODOS OS TESTES PASSARAM", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }

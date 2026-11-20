@@ -36,8 +36,12 @@ Name: "ptbr"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na área de trabalho"; GroupDescription: "Atalhos:"
 
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\Sounds"
+
 [Files]
 Source: "{#SrcExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\sounds\*"; DestDir: "{app}\Sounds"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\Nexus Drum Trigger"; Filename: "{app}\Nexus Drum Trigger.exe"

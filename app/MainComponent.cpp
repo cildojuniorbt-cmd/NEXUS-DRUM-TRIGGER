@@ -57,14 +57,28 @@ private:
     Component* lead = nullptr;
 };
 
-struct FactoryKit { const char* name; int kick, snare, hat, tom1, tom2, crash, ride; float eqLow, eqMid, eqHigh, revWet, revRoom, blend; };
+// Kits prontos: cada som é procurado pelo nome (os gravados vêm de Sounds/; se faltarem, usa o sintetizado "reserva").
+struct FactoryKit { const char* name; const char* kick; const char* snare; const char* hat; const char* tom1; const char* tom2; const char* floor; const char* crash; const char* ride;
+                    float eqLow, eqMid, eqHigh, revWet, revRoom, blend; };
 const FactoryKit kKits[] = {
-    {"Rock Moderno",       2, 4, 8, 10, 12, 13, 15, 2.0f,  0.0f, 1.5f, 0.18f, 0.50f, 0.60f},
-    {"Pop Brilhante",      1, 3, 8, 10, 11, 13, 15, 0.0f,  1.0f, 3.0f, 0.22f, 0.45f, 0.50f},
-    {"Funk Seco",          1, 5, 8, 11, 12, 13, 15, 1.0f, -1.0f, 1.0f, 0.08f, 0.30f, 0.70f},
-    {"Eletr\xc3\xb4nico 808", 0, 3, 8, 10, 12, 13, 15, 3.0f, -2.0f, 2.0f, 0.15f, 0.40f, 0.90f},
-    {"Sala Grande",        2, 4, 9, 10, 12, 13, 15, 1.0f,  0.0f, 2.0f, 0.38f, 0.80f, 0.45f}};
-constexpr int kNumKits = 5;
+    {"Acústico Nexus", "Bumbo Acústico 24\"", "Caixa Acústica 14\"", "Chimbal Acústico Fechado", "Tom Acústico 14\"", "Tom Acústico 15\"", "Surdo Acústico 18\"", "Prato Ataque 17\"", "Prato Condução 22\"", 0.0f, 0.0f, 1.0f, 0.14f, 0.45f, 0.55f},
+    {"Rock de Arena",  "Bumbo Acústico 24\"", "Caixa Rimshot", "Chimbal Acústico Fechado", "Tom Acústico 15\"", "Surdo Acústico 18\"", "Surdo Acústico 22\"", "Prato Ataque 17\"", "Prato China 18\"", 2.0f, -1.0f, 2.0f, 0.26f, 0.70f, 0.65f},
+    {"Estúdio Seco",   "Bumbo Acústico 24\"", "Caixa Acústica 14\"", "Chimbal Acústico Fechado", "Tom Acústico 14\"", "Tom Acústico 15\"", "Surdo Acústico 18\"", "Prato Ataque 17\"", "Condução Cúpula", 1.0f, 0.0f, 0.5f, 0.04f, 0.30f, 0.50f},
+    {"Sala Grande",    "Bumbo Acústico 24\"", "Caixa Acústica 14\"", "Chimbal Acústico Meio-Aberto", "Tom Acústico 15\"", "Surdo Acústico 18\"", "Surdo Acústico 22\"", "Prato Ataque 17\"", "Prato Condução 22\"", 1.0f, 0.0f, 2.0f, 0.38f, 0.85f, 0.45f},
+    {"Eletrônico 808", "Bumbo 808", "Caixa 909", "Chimbal Fechado", "Tom Agudo", "Tom Médio", "Tom Grave", "Prato Ataque", "Prato Condução (Ride)", 3.0f, -2.0f, 2.0f, 0.15f, 0.40f, 0.90f},
+    {"Funk Seco",      "Bumbo Seco", "Caixa Seca", "Chimbal Fechado", "Tom Médio", "Tom Grave", "Tom Grave", "Prato Ataque", "Prato Condução (Ride)", 1.0f, -1.0f, 1.0f, 0.08f, 0.30f, 0.70f}};
+constexpr int kNumKits = 6;
+
+// som reserva (sintetizado) quando o gravado não existir
+const char* fallbackFor(const std::string& n) {
+    if (n.find("Bumbo") == 0) return "Bumbo Rock";
+    if (n.find("Caixa") == 0) return "Caixa Rock";
+    if (n.find("Chimbal") == 0) return n.find("Aberto") != std::string::npos ? "Chimbal Aberto" : "Chimbal Fechado";
+    if (n.find("Tom") == 0) return "Tom Médio";
+    if (n.find("Surdo") == 0) return "Tom Grave";
+    if (n.find("Condução") != std::string::npos) return "Prato Condução (Ride)";
+    return "Prato Ataque";
+}
 
 } // namespace
 
@@ -499,7 +513,9 @@ MainComponent::MainComponent() {
     lnf.applyColours();
     LookAndFeel::setDefaultLookAndFeel(&lnf);
 
+    decodeFactorySounds();
     engine.prepare(48000.0); // monta o banco de sons para a interface (refeito em prepareToPlay)
+    addFactorySounds();
     loadCustomSounds();
     loadPreset(engine.params, dataDir().getChildFile("ultima-sessao.ndtkit"));
     engine.params.mode = static_cast<int>(nexus::Mode::Module);
@@ -538,6 +554,11 @@ MainComponent::MainComponent() {
     kitBtn.setButtonText(theme::u8("Kit atual"));
     kitBtn.setColour(TextButton::textColourOffId, theme::text);
 
+    // primeira vez com os sons gravados: aplica o kit acústico (dá para trocar no seletor de kits)
+    {
+        const auto flag = dataDir().getChildFile("sons-gravados-v1.flag");
+        if (!factory.empty() && !flag.existsAsFile()) { applyKit(0); dataDir().createDirectory(); flag.replaceWithText("1"); }
+    }
     refreshAll();
     showPage(0);
     setSize(1280, 860);
@@ -562,6 +583,7 @@ void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate
     inBuf.assign(nexus::kMaxInputs, std::vector<float>(cap, 0.0f)); outX.assign(nexus::kMaxOutputs - 2, std::vector<float>(cap, 0.0f)); outL.assign(cap, 0.0f); outR.assign(cap, 0.0f);
     currentFs = sampleRate;
     engine.prepare(sampleRate);
+    addFactorySounds();
     loadCustomSounds();
     MessageManager::callAsync([this] { refreshAll(); });
 }
@@ -628,6 +650,66 @@ int MainComponent::loadWavInto(const File& f) {
     return engine.soundBank().addCustom(name.toStdString(), std::move(out));
 }
 
+File MainComponent::factoryDir() {
+    const auto exe = File::getSpecialLocation(File::currentExecutableFile);
+    const File cands[] = {
+        exe.getParentDirectory().getChildFile("Sounds"),                                   // Windows (instalador) / Linux
+        exe.getParentDirectory().getParentDirectory().getChildFile("Resources/Sounds"),   // Mac (dentro do .app)
+#ifdef NDT_SOURCE_SOUNDS
+        File(NDT_SOURCE_SOUNDS),                                                           // rodando da pasta do projeto
+#endif
+    };
+    for (auto& d : cands) if (d.isDirectory()) return d;
+    return {};
+}
+
+void MainComponent::decodeFactorySounds() {
+    factory.clear();
+    const auto root = factoryDir();
+    if (!root.isDirectory()) return;
+    AudioFormatManager fm; fm.registerBasicFormats();
+    auto packs = root.findChildFiles(File::findDirectories, false);
+    packs.sort();
+    for (auto& pack : packs) {
+        const auto js = JSON::parse(pack.getChildFile("sons.json"));
+        auto* list = js["sounds"].getArray();
+        if (list == nullptr) continue;
+        for (auto& item : *list) {
+            const auto dir = pack.getChildFile(item["id"].toString());
+            const int nl = static_cast<int>(item["layers"]);
+            auto layers = std::make_shared<nexus::Sound::Layers>();
+            double rate = 44100.0;
+            for (int l = 1; l <= nl; ++l) {
+                std::vector<nexus::Take> takes;
+                for (int rr = 1; rr <= 8; ++rr) {
+                    const auto f = dir.getChildFile("v" + String(l).paddedLeft('0', 2) + "_rr" + String(rr) + ".flac");
+                    if (!f.existsAsFile()) break;
+                    std::unique_ptr<AudioFormatReader> rd(fm.createReaderFor(f));
+                    if (rd == nullptr || rd->lengthInSamples < 2) continue;
+                    rate = rd->sampleRate;
+                    const int n = static_cast<int>(rd->lengthInSamples);
+                    AudioBuffer<float> b(static_cast<int>(rd->numChannels), n);
+                    rd->read(&b, 0, n, 0, true, true);
+                    nexus::Take t;
+                    t.L.assign(b.getReadPointer(0), b.getReadPointer(0) + n);
+                    if (b.getNumChannels() > 1) t.R.assign(b.getReadPointer(1), b.getReadPointer(1) + n);
+                    takes.push_back(std::move(t));
+                }
+                if (!takes.empty()) layers->push_back(std::move(takes));
+            }
+            if (layers->empty()) continue;
+            FactorySound fsnd;
+            fsnd.name = item["name"].toString().toStdString(); fsnd.cat = item["category"].toString().toStdString();
+            fsnd.choke = static_cast<int>(item["choke"]); fsnd.layers = std::move(layers); fsnd.rate = rate;
+            factory.push_back(std::move(fsnd));
+        }
+    }
+}
+
+void MainComponent::addFactorySounds() {
+    for (auto& f : factory) engine.soundBank().addSampled(f.name, f.cat, f.choke, f.layers, f.rate, currentFs);
+}
+
 void MainComponent::loadCustomSounds() {
     auto files = dataDir().getChildFile("Sons").findChildFiles(File::findFiles, false, "*.*");
     files.sort();
@@ -666,18 +748,27 @@ void MainComponent::refreshAll() {
     for (auto& p : pages) if (p) p->refresh();
 }
 
+int MainComponent::findSound(const std::string& name) const {
+    auto& bank = engine.soundBank();
+    for (int pass = 0; pass < 2; ++pass) {
+        const std::string want = pass == 0 ? name : std::string(fallbackFor(name));
+        for (int i = 0; i < bank.size(); ++i) if (bank.get(i).name == want) return i;
+    }
+    return 0;
+}
+
 void MainComponent::applyKit(int index) {
     currentKit = index;
     const auto& k = kKits[index];
     auto& p = engine.params;
-    const int snd[8] = {k.kick, k.snare, k.hat, k.tom1, k.tom2, k.tom2, k.crash, k.ride};
+    const int snd[8] = {findSound(k.kick), findSound(k.snare), findSound(k.hat), findSound(k.tom1), findSound(k.tom2), findSound(k.floor), findSound(k.crash), findSound(k.ride)};
     for (int i = 0; i < nexus::kNumPads; ++i) p.pad[i].sound = snd[i];
-    const int zs[6] = {k.kick, k.snare, k.hat, k.tom1, k.tom2, k.crash};
+    const int zs[6] = {snd[0], snd[1], snd[2], snd[3], snd[4], snd[6]};
     for (int z = 0; z < nexus::kNumZones; ++z) p.zone[z].sound = zs[z];
     p.eqLowDb = k.eqLow; p.eqMidDb = k.eqMid; p.eqHighDb = k.eqHigh;
     p.reverbWet = k.revWet; p.reverbRoom = k.revRoom; p.blend = k.blend;
     kitBtn.setButtonText(theme::u8(k.name));
-    p.previewSound = k.kick;
+    p.previewSound = snd[0];
     refreshAll();
 }
 

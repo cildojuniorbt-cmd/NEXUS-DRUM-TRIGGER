@@ -41,3 +41,8 @@ Sem placa de som/ASIO SDK o JUCE usa WASAPI no Windows; para ASIO defina `JUCE_A
 ## Instalação
 - **Windows:** baixe `NexusDrumTrigger-Setup.exe` na página de Releases e execute. Ele cria atalhos no Menu Iniciar (e na área de trabalho, se quiser) e pode ser desinstalado em Configurações › Aplicativos.
 - **Mac:** abra `NexusDrumTrigger-macOS.dmg` e arraste o app para **Aplicativos**. Na primeira vez, clique com o botão direito no app e escolha **Abrir**.
+
+## v0.4.3 · Sons acústicos gravados
+- 16 sons de bateria acústica gravada (bumbo 24", caixa 14" com rimshot e aro lateral, chimbal fechado/meio-aberto/aberto/pedal, 4 tons, ataque, condução, cúpula e china), cada um com **várias camadas de força** e **variações** que se alternam (sem efeito "metralhadora"), em estéreo.
+- Kits prontos novos: Acústico Nexus, Rock de Arena, Estúdio Seco e Sala Grande (os eletrônicos continuam).
+- Origem dos sons: *Big Rusty Drums*, Karoryfer Samples, licença CC0 1.0 (domínio público). Veja `sounds/rusty/CREDITOS.txt`.

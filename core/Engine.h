@@ -158,6 +158,7 @@ public:
 
     const SoundBank& sounds() const { return bank; }
     SoundBank& soundBank() { return bank; }
+    const SoundBank& soundBank() const { return bank; }
 
     // inputs: um ponteiro por canal de entrada da interface (nIn canais). Saída estéreo.
     // extra: buffers das saídas 3..8 (kMaxOutputs-2 ponteiros; pode ser nullptr). Os sons com saída "1" e "2" vão para L e R.
@@ -324,7 +325,7 @@ private:
     }
 
     struct Voice {
-        const std::vector<float>* data = nullptr;
+        const float* dL = nullptr; const float* dR = nullptr; size_t len = 0;
         double pos = 0.0, inc = 1.0;
         float gainL = 0.0f, gainR = 0.0f;
         int choke = 0, route = 0, owner = 0;
@@ -378,13 +379,30 @@ private:
         const float sens = pp.velocitySens.load();
         const float vel = 1.0f - sens + sens * velocity; // sens=0 -> sempre 1.0
         const float pitch = std::pow(2.0f, pp.pitchSemis.load() / 12.0f);
-        startVoice(pp.sound.load(), vel * pp.level.load(), pitch, pp.pan.load(), std::min(kMaxOutputs, std::max(0, pp.outRoute.load())),
-                   isZone ? kNumPads + statusIdx : statusIdx);
+        startVoice(pp.sound.load(), pp.level.load(), pitch, pp.pan.load(), std::min(kMaxOutputs, std::max(0, pp.outRoute.load())),
+                   isZone ? kNumPads + statusIdx : statusIdx, vel);
     }
 
-    void startVoice(int soundIdx, float gain, float pitch, float pan, int route = 0, int owner = 0) {
+    void startVoice(int soundIdx, float gain, float pitch, float pan, int route = 0, int owner = 0, float vel = 1.0f) {
         if (bank.size() == 0) return;
         const Sound& s = bank.get(soundIdx);
+        // som gravado: a força escolhe a camada (a própria gravação já é mais fraca/forte) e as variações se alternam
+        const float* dL = s.data.data(); const float* dR = nullptr; size_t len = s.data.size();
+        if (s.sampled()) {
+            const int nl = static_cast<int>(s.layers->size());
+            const float v = std::min(1.0f, std::max(0.0f, vel));
+            const int li = std::min(nl - 1, static_cast<int>(v * static_cast<float>(nl)));
+            const auto& takes = (*s.layers)[static_cast<size_t>(li)];
+            const size_t si = static_cast<size_t>(std::min(std::max(soundIdx, 0), SoundBank::kMaxSounds - 1));
+            const Take& t = takes[(rrCounter[si]++) % takes.size()];
+            dL = t.L.data(); dR = t.R.empty() ? nullptr : t.R.data(); len = t.L.size();
+            // suaviza o salto entre camadas: dentro da camada, varia um pouco o volume
+            const float within = v * static_cast<float>(nl) - static_cast<float>(li);
+            gain *= 0.82f + 0.18f * std::min(1.0f, within);
+        } else {
+            gain *= vel;
+        }
+        if (len < 2) return;
         if (s.chokeGroup > 0) // chimbal: novo golpe corta o anterior
             for (auto& v : voices) if (v.active && v.choke == s.chokeGroup && v.fadeStep == 0.0f) v.fadeStep = static_cast<float>(1.0 / (fs * 0.006));
         Voice* slot = nullptr;
@@ -392,7 +410,7 @@ private:
         if (!slot) { slot = &voices[0]; for (auto& v : voices) if (v.age < slot->age) slot = &v; } // rouba a mais antiga
         const float p = std::min(1.0f, std::max(-1.0f, pan));
         const float ang = (p + 1.0f) * 0.25f * static_cast<float>(kPi);
-        slot->data = &s.data; slot->pos = 0.0; slot->inc = pitch;
+        slot->dL = dL; slot->dR = dR; slot->len = len; slot->pos = 0.0; slot->inc = pitch * (s.sampled() ? s.rate : 1.0);
         slot->gainL = gain * std::cos(ang) * 1.414f; slot->gainR = gain * std::sin(ang) * 1.414f;
         slot->route = route; slot->owner = std::min(kChannels - 1, std::max(0, owner));
         if (route > 0) { slot->gainL = slot->gainR = gain; }
@@ -402,13 +420,13 @@ private:
     inline void renderVoices(float* L, float* R, float* bus) {
         for (auto& v : voices) {
             if (!v.active) continue;
-            const auto& d = *v.data;
             const size_t i0 = static_cast<size_t>(v.pos);
-            if (i0 + 1 >= d.size()) { v.active = false; continue; }
+            if (i0 + 1 >= v.len) { v.active = false; continue; }
             const float fr = static_cast<float>(v.pos - static_cast<double>(i0));
-            const float s = (d[i0] * (1.0f - fr) + d[i0 + 1] * fr) * v.fade;
-            if (v.route > 0) bus[v.route - 1] += s * v.gainL;
-            else { L[v.owner] += s * v.gainL; R[v.owner] += s * v.gainR; }
+            const float sl = (v.dL[i0] * (1.0f - fr) + v.dL[i0 + 1] * fr) * v.fade;
+            const float sr = v.dR ? (v.dR[i0] * (1.0f - fr) + v.dR[i0 + 1] * fr) * v.fade : sl;
+            if (v.route > 0) bus[v.route - 1] += 0.5f * (sl + sr) * v.gainL;
+            else { L[v.owner] += sl * v.gainL; R[v.owner] += sr * v.gainR; }
             v.pos += v.inc;
             if (v.fadeStep > 0.0f) { v.fade -= v.fadeStep; if (v.fade <= 0.0f) v.active = false; }
         }
@@ -416,6 +434,7 @@ private:
 
     double fs = 48000.0;
     SoundBank bank;
+    unsigned rrCounter[SoundBank::kMaxSounds] = {};
     TriggerDetector det[kNumPads];
     SpectralDetector sdet;
     EchoCanceller aec[2];
