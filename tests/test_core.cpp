@@ -334,6 +334,25 @@ int main() {
         CHECK(z.status.learnedZone.load() >= 0 && !z.params.learn.load(), "Aprender no EAD: a batida seleciona uma peça");
     }
 
+    { // mute, solo, eco (delay) e fila de batidas para a saída MIDI
+        Engine e; setup(e);
+        e.params.pad[0].mute = true;
+        auto c = silence(2, 9600); addHit(c[0], 1000, 0.6f, 100.0f);
+        Run r = run(e, c);
+        CHECK(r.hits[0] == 1 && r.outPeak < 1e-6f, "mute: a batida é detectada mas o pad fica mudo");
+        Engine s2; setup(s2); s2.params.pad[1].solo = true;
+        auto c2 = silence(2, 9600); addHit(c2[0], 1000, 0.6f, 100.0f);
+        Run r2 = run(s2, c2);
+        CHECK(r2.outPeak < 1e-6f, "solo em outro pad silencia este pad");
+        Engine d; setup(d); d.params.delayMix = 0.8f; d.params.delayMs = 100.0f; d.params.manualHit[0] = 900;
+        Run r3 = run(d, silence(2, 48000));
+        CHECK(r3.finite && r3.outPeak > 0.2f, "eco (delay) gera saída finita");
+        Engine q; setup(q); q.params.pad[2].inputChannel = 0; q.params.activePads = 3;
+        { auto cq = silence(3, 9600); addHit(cq[2], 1000, 0.6f, 6000.0f); q.params.pad[2].inputChannel = 2; run(q, cq); }
+        EngineStatus::HitEvent he; const bool got = q.status.popHit(he);
+        CHECK(got && he.idx == 2 && !he.zone && he.vel > 0.6f, "cada batida entra na fila da saída MIDI");
+    }
+
     std::printf("\n%s (%d falha%s)\n", failures ? "TESTES FALHARAM" : "TODOS OS TESTES PASSARAM", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }

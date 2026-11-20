@@ -31,3 +31,9 @@ Sem placa de som/ASIO SDK o JUCE usa WASAPI no Windows; para ASIO defina `JUCE_A
 - `core/` – motor de áudio sem dependências (detector de batida, sons sintetizados, EQ, compressor, reverb)
 - `app/` – interface JUCE
 - `tests/` – testes automáticos do núcleo
+
+
+## v0.4.2
+- **Mixer**: fader de volume, pan, mudo (M) e solo (S) por peça (Bateria eletrônica ou EAD), canal dos microfones e volume geral, com medidores.
+- **Efeitos**: reverb, equalizador de 3 bandas, compressor e eco (delay) no mix principal.
+- **MIDI**: entrada (módulo/teclado dispara os pads), saída (cada batida envia uma nota), notas editáveis por peça com "Aprender".

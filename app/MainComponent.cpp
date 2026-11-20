@@ -113,6 +113,20 @@ public:
             case 4: { // grade (módulo)
                 for (int a = 0; a < 3; ++a) for (int bb = 0; bb < 3; ++bb) g.fillRoundedRectangle(b.getX() + 1.0f + static_cast<float>(a) * 7.5f, b.getY() + 1.0f + static_cast<float>(bb) * 7.5f, 5.5f, 5.5f, 1.5f);
                 break; }
+            case 5: { // mixer (faders)
+                for (int i = 0; i < 3; ++i) {
+                    const float x = b.getX() + 3.0f + static_cast<float>(i) * 7.0f, ky = b.getY() + 4.0f + static_cast<float>((i * 7) % 11);
+                    g.fillRoundedRectangle(x + 1.0f, b.getY() + 1.0f, 2.0f, b.getHeight() - 2.0f, 1.0f);
+                    g.fillRoundedRectangle(x - 1.5f, ky, 7.0f, 4.0f, 1.5f);
+                }
+                break; }
+            case 6: { // efeitos (estrela)
+                Path st; st.addStar(c, 4, 3.0f, 10.0f, 0.0f); g.fillPath(st);
+                break; }
+            case 7: { // MIDI (conector)
+                g.drawEllipse(b.reduced(1.5f), 2.0f);
+                for (int i = 0; i < 5; ++i) { const float a = MathConstants<float>::pi * (0.15f + 0.175f * static_cast<float>(i)) + MathConstants<float>::pi; g.fillEllipse(c.x + 5.0f * std::cos(a) - 1.4f, c.y + 5.0f * std::sin(a) - 1.4f + 2.0f, 2.8f, 2.8f); }
+                break; }
             default: { // paleta
                 g.drawEllipse(b.reduced(2.0f), 2.0f);
                 g.fillEllipse(c.x - 5.5f, c.y - 4.0f, 3.6f, 3.6f); g.fillEllipse(c.x + 1.5f, c.y - 5.0f, 3.6f, 3.6f); g.fillEllipse(c.x - 1.5f, c.y + 2.0f, 3.6f, 3.6f);
@@ -474,6 +488,8 @@ private:
 // ============================================================================
 //  MainComponent
 // ============================================================================
+#include "ExtraPages.h"
+
 File MainComponent::dataDir() const {
     return File::getSpecialLocation(File::userApplicationDataDirectory).getChildFile("Nexus Drum Trigger");
 }
@@ -492,8 +508,11 @@ MainComponent::MainComponent() {
     pages[0] = std::unique_ptr<PageBase>(new TriggerPage(engine, changed, 2));
     pages[1] = std::unique_ptr<PageBase>(new TriggerPage(engine, changed, nexus::kNumPads));
     pages[2] = std::unique_ptr<PageBase>(new EadPage(engine, changed));
-    pages[3] = std::unique_ptr<PageBase>(new AudioPage(deviceManager));
-    pages[4] = std::unique_ptr<PageBase>(new LookPage([this] { applyTheme(); }));
+    pages[3] = std::unique_ptr<PageBase>(new MixerPage(engine, changed));
+    pages[4] = std::unique_ptr<PageBase>(new EffectsPage(engine, changed));
+    pages[5] = std::unique_ptr<PageBase>(new MidiPage(engine, changed, dataDir().getChildFile("midi.xml")));
+    pages[6] = std::unique_ptr<PageBase>(new AudioPage(deviceManager));
+    pages[7] = std::unique_ptr<PageBase>(new LookPage([this] { applyTheme(); }));
     for (auto& p : pages) addChildComponent(*p);
     {
         auto imp = [this] { importSounds(); };
@@ -502,9 +521,9 @@ MainComponent::MainComponent() {
         static_cast<EadPage*>(pages[2].get())->setImportHandler(imp);
     }
 
-    const String labels[] = {"Trigger", theme::u8("Bateria eletrônica"), "EAD", theme::u8("Áudio"), theme::u8("Aparência")};
-    for (int i = 0; i < 5; ++i) {
-        static const int icons[] = {0, 4, 1, 2, 3};
+    const String labels[] = {"Trigger", theme::u8("Bateria eletrônica"), "EAD", "Mixer", "Efeitos", "MIDI", theme::u8("Áudio"), theme::u8("Aparência")};
+    for (int i = 0; i < 8; ++i) {
+        static const int icons[] = {0, 4, 1, 5, 6, 7, 2, 3};
         nav[i] = std::make_unique<NavButton>(labels[i], icons[i]);
         nav[i]->onClick = [this, i] { showPage(i); };
         addAndMakeVisible(*nav[i]);
@@ -515,7 +534,7 @@ MainComponent::MainComponent() {
     kitPrev.onClick = [this] { stepKit(-1); }; kitNext.onClick = [this] { stepKit(+1); };
     kitBtn.onClick = [this] { showKitMenu(); };
     gearBtn.setButtonText(theme::u8("⚙"));
-    gearBtn.onClick = [this] { showPage(3); };
+    gearBtn.onClick = [this] { showPage(6); };
     kitBtn.setButtonText(theme::u8("Kit atual"));
     kitBtn.setColour(TextButton::textColourOffId, theme::text);
 
@@ -635,7 +654,7 @@ void MainComponent::importSounds() {
 void MainComponent::showPage(int index) {
     if (currentPage == 1) modulePads = jmax(2, engine.params.activePads.load());
     currentPage = index;
-    for (int i = 0; i < 5; ++i) { pages[i]->setVisible(i == index); nav[i]->setToggleState(i == index, dontSendNotification); }
+    for (int i = 0; i < 8; ++i) { pages[i]->setVisible(i == index); nav[i]->setToggleState(i == index, dontSendNotification); }
     if (index == 0) { engine.params.mode = static_cast<int>(nexus::Mode::Module); engine.params.activePads = 2; }
     else if (index == 1) { engine.params.mode = static_cast<int>(nexus::Mode::Module); engine.params.activePads = jmax(2, modulePads); }
     else if (index == 2) engine.params.mode = static_cast<int>(nexus::Mode::Hybrid);
@@ -757,7 +776,7 @@ void MainComponent::paint(Graphics& g) {
         g.setGradientFill(ColourGradient(theme::panelTop, 0, r.getY(), theme::panelBot, 0, r.getBottom(), false));
         g.fillRoundedRectangle(r, 12.0f);
         g.setColour(theme::edge.brighter(0.15f)); g.drawRoundedRectangle(r.reduced(0.5f), 12.0f, 1.2f);
-        const String sub = currentPage == 0 ? theme::u8("Trigger · 2 canais") : (currentPage == 1 ? theme::u8("Bateria eletrônica · até 8 canais") : (currentPage == 2 ? theme::u8("Acústico + Eletrônico (EAD)") : theme::u8("Configurações")));
+        const String sub = currentPage == 0 ? theme::u8("Trigger · 2 canais") : (currentPage == 1 ? theme::u8("Bateria eletrônica · até 8 canais") : (currentPage == 2 ? theme::u8("Acústico + Eletrônico (EAD)") : (currentPage == 3 ? theme::u8("Mixer") : (currentPage == 4 ? theme::u8("Efeitos do mix principal") : (currentPage == 5 ? theme::u8("Configuração de MIDI") : theme::u8("Configurações"))))));
         g.setColour(theme::muted); g.setFont(theme::font(13.0f));
         g.drawText(sub, kitRect.withTrimmedTop(36).withHeight(22), Justification::centred);
     }
@@ -796,7 +815,7 @@ void MainComponent::resized() {
     gearBtn.setBounds(header.getRight() - 64, 14, 48, 44);
 
     auto side = r.removeFromLeft(200).withTrimmedTop(14);
-    for (int i = 0; i < 5; ++i) nav[i]->setBounds(side.removeFromTop(54));
+    for (int i = 0; i < 8; ++i) nav[i]->setBounds(side.removeFromTop(52));
     auto area = r.reduced(10);
     for (auto& p : pages) p->setBounds(area);
 }

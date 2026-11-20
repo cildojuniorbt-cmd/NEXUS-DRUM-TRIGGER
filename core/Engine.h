@@ -31,6 +31,7 @@ struct PadParams {
     std::atomic<float> holdMs{2.5f};         // tempo de leitura do pico (mede a força da batida; mais tempo = mais preciso, mais atraso)
     std::atomic<float> hpHz{60.0f};
     std::atomic<float> lpHz{6000.0f};
+    std::atomic<bool> mute{false}, solo{false};
     std::atomic<float> dynamics{1.0f};       // curva de velocity
     std::atomic<float> velocitySens{1.0f};   // 0 = volume fixo, 1 = totalmente dinâmico
 
@@ -57,6 +58,18 @@ struct EngineParams {
     std::atomic<float> eqLowDb{0.0f}, eqMidDb{0.0f}, eqHighDb{0.0f};
     std::atomic<float> compThresholdDb{-18.0f}, compRatio{3.0f}, compAttackMs{8.0f}, compReleaseMs{120.0f}, compMakeupDb{0.0f};
     std::atomic<bool> compOn{true};
+
+    // Efeitos do barramento principal (valem para tudo que sai no mix estéreo)
+    std::atomic<float> mEqLowDb{0.0f}, mEqMidDb{0.0f}, mEqHighDb{0.0f};
+    std::atomic<float> mCompThresholdDb{-12.0f}, mCompRatio{2.0f}, mCompAttackMs{10.0f}, mCompReleaseMs{150.0f}, mCompMakeupDb{0.0f};
+    std::atomic<bool> mCompOn{false}, mEqOn{false};
+    std::atomic<float> delayMs{320.0f}, delayFeedback{0.35f}, delayMix{0.0f};
+
+    // MIDI: nota de cada pad / peça do EAD (padrão General MIDI) e saída MIDI
+    std::atomic<int> midiNote[8] = {{36}, {38}, {42}, {48}, {45}, {41}, {49}, {51}};
+    std::atomic<int> midiZoneNote[6] = {{36}, {38}, {42}, {48}, {45}, {49}};
+    std::atomic<bool> midiOutOn{false};
+    std::atomic<int> midiOutChannel{10};
 
     // Comandos vindos da interface
     std::atomic<int> manualHit[kNumPads] = {{0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}};  // velocity*1000 (0 = nenhum)
@@ -100,6 +113,23 @@ struct EngineStatus {
     std::atomic<int> calibDone{-1};      // última zona calibrada (para a interface avisar)
     std::atomic<int> learnedInput{-1};   // entrada em que a batida foi ouvida (modo Aprender)
     std::atomic<int> learnedZone{-1};    // peça reconhecida (modo Aprender, EAD)
+    // fila de batidas para a saída MIDI (1 produtor = áudio, 1 consumidor = thread MIDI)
+    struct HitEvent { int idx = 0; bool zone = false; float vel = 0.0f; };
+    HitEvent hitQueue[64];
+    std::atomic<unsigned> hitHead{0}, hitTail{0};
+    void pushHit(int idx, bool zone, float vel) {
+        const unsigned h = hitHead.load(std::memory_order_relaxed);
+        if (h - hitTail.load(std::memory_order_acquire) >= 64) return;
+        hitQueue[h & 63] = {idx, zone, vel};
+        hitHead.store(h + 1, std::memory_order_release);
+    }
+    bool popHit(HitEvent& e) {
+        const unsigned t = hitTail.load(std::memory_order_relaxed);
+        if (t == hitHead.load(std::memory_order_acquire)) return false;
+        e = hitQueue[t & 63];
+        hitTail.store(t + 1, std::memory_order_release);
+        return true;
+    }
 };
 
 class Engine {
@@ -114,7 +144,7 @@ public:
         sdet.prepare(fs); aec[0].prepare(1024); aec[1].prepare(1024); prevOut = 0.0f;
         for (auto& h : zoneHold) h = 0;
         calSeen = -1; calN = 0;
-        eq.prepare(fs); comp.prepare(fs); reverb.prepare(fs);
+        eq.prepare(fs); comp.prepare(fs); reverb.prepare(fs); meq.prepare(fs); mcomp.prepare(fs); delay.prepare(fs);
         for (auto& v : voices) v = Voice{};
         voiceCounter = 0;
         outMeter = 0.0f;
@@ -157,6 +187,14 @@ public:
         comp.set(params.compThresholdDb.load(), params.compRatio.load(), params.compAttackMs.load(),
                  params.compReleaseMs.load(), params.compMakeupDb.load());
         reverb.set(params.reverbRoom.load(), params.reverbDamp.load(), params.reverbWet.load());
+        const bool mEqOn = params.mEqOn.load(), mCompOn = params.mCompOn.load();
+        meq.set(params.mEqLowDb.load(), params.mEqMidDb.load(), params.mEqHighDb.load());
+        mcomp.set(params.mCompThresholdDb.load(), params.mCompRatio.load(), params.mCompAttackMs.load(), params.mCompReleaseMs.load(), params.mCompMakeupDb.load());
+        delay.set(params.delayMs.load(), params.delayFeedback.load(), params.delayMix.load());
+        anySolo = false;
+        for (int p = 0; p < kNumPads; ++p) if (params.pad[p].solo.load()) anySolo = true;
+        anySoloZone = false;
+        for (int z = 0; z < kNumZones; ++z) if (params.zone[z].solo.load()) anySoloZone = true;
         const bool compOn = params.compOn.load();
         const float blend = params.blend.load();
         const bool aecOn = hybrid && params.antiFeedback.load();
@@ -168,11 +206,11 @@ public:
         // comandos da interface
         for (int p = 0; p < kNumPads; ++p) {
             const int m = params.manualHit[p].exchange(0);
-            if (m > 0) fire(params.pad[p], p, static_cast<float>(m) / 1000.0f);
+            if (m > 0) fire(params.pad[p], p, static_cast<float>(m) / 1000.0f, false);
         }
         for (int z = 0; z < kNumZones; ++z) {
             const int m = params.manualZone[z].exchange(0);
-            if (m > 0) fire(params.zone[z], z, static_cast<float>(m) / 1000.0f);
+            if (m > 0) fire(params.zone[z], z, static_cast<float>(m) / 1000.0f, false);
         }
         const int pv = params.previewSound.exchange(-1);
         if (pv >= 0) startVoice(pv, 0.9f, 1.0f, 0.0f);
@@ -230,8 +268,12 @@ public:
             // 4) reverb (ambiência)
             float wL, wR;
             reverb.process(L, R, wL, wR);
-            L = softLimit((L + wL) * master);
-            R = softLimit((R + wR) * master);
+            L += wL; R += wR;
+            if (mEqOn) meq.process(L, R);
+            if (mCompOn) mcomp.process(L, R);
+            delay.process(L, R);
+            L = softLimit(L * master);
+            R = softLimit(R * master);
             // saídas independentes (sem reverb): 1 -> L, 2 -> R, 3..8 -> canais extras
             L = softLimit(L + softLimit(bus[0] * elec * master));
             R = softLimit(R + softLimit(bus[1] * elec * master));
@@ -301,13 +343,16 @@ private:
         }
     }
 
-    void fire(PadParams& pp, int statusIdx, float velocity) {
+    void fire(PadParams& pp, int statusIdx, float velocity, bool announce = true) {
+        const bool isZone = (&pp >= &params.zone[0] && &pp < &params.zone[0] + kNumZones);
+        status.lastVelocity[statusIdx].store(velocity, std::memory_order_relaxed);
+        status.hitCount[statusIdx].fetch_add(1u, std::memory_order_relaxed);
+        if (announce) status.pushHit(statusIdx, isZone, velocity);
+        if (pp.mute.load() || (isZone ? (anySoloZone && !pp.solo.load()) : (anySolo && !pp.solo.load()))) return;
         const float sens = pp.velocitySens.load();
         const float vel = 1.0f - sens + sens * velocity; // sens=0 -> sempre 1.0
         const float pitch = std::pow(2.0f, pp.pitchSemis.load() / 12.0f);
         startVoice(pp.sound.load(), vel * pp.level.load(), pitch, pp.pan.load(), std::min(kMaxOutputs, std::max(0, pp.outRoute.load())));
-        status.lastVelocity[statusIdx].store(velocity, std::memory_order_relaxed);
-        status.hitCount[statusIdx].fetch_add(1u, std::memory_order_relaxed);
     }
 
     void startVoice(int soundIdx, float gain, float pitch, float pan, int route = 0) {
@@ -352,6 +397,10 @@ private:
     int calSeen = -1, calN = 0;
     float calSum[kBands] = {};
     Eq3 eq; Compressor comp; Reverb reverb;
+    Eq3 meq;
+    Compressor mcomp;
+    Delay delay;
+    bool anySolo = false, anySoloZone = false;
     std::array<Voice, 32> voices{};
     unsigned long long voiceCounter = 0;
     float outMeter = 0.0f;

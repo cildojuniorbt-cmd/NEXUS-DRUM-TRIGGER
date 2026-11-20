@@ -107,6 +107,37 @@ private:
 };
 
 // Limitador suave de saída (protege a P.A.).
+// Eco estéreo (delay) com realimentação e filtro de agudos no laço.
+class Delay {
+public:
+    void prepare(double sampleRate) {
+        fs = sampleRate;
+        size = static_cast<int>(fs * 1.6) + 4;
+        bufL.assign(static_cast<size_t>(size), 0.0f); bufR.assign(static_cast<size_t>(size), 0.0f);
+        pos = 0; lpL = lpR = 0.0f;
+    }
+    void set(float timeMs, float feedbackIn, float mixIn) {
+        d = std::min(size - 2, std::max(1, static_cast<int>(timeMs * 0.001 * fs)));
+        fb = std::min(0.92f, std::max(0.0f, feedbackIn)); mix = std::min(1.0f, std::max(0.0f, mixIn));
+    }
+    inline void process(float& l, float& r) {
+        if (mix <= 0.0001f) return;
+        const int rp = (pos - d + size) % size;
+        const float dl = bufL[static_cast<size_t>(rp)], dr = bufR[static_cast<size_t>(rp)];
+        lpL += 0.45f * (dl - lpL); lpR += 0.45f * (dr - lpR);
+        // ping-pong leve: a repetição de um lado alimenta o outro
+        bufL[static_cast<size_t>(pos)] = l + lpR * fb;
+        bufR[static_cast<size_t>(pos)] = r + lpL * fb;
+        pos = (pos + 1) % size;
+        l += dl * mix; r += dr * mix;
+    }
+private:
+    double fs = 48000.0;
+    int size = 4, pos = 0, d = 1;
+    float fb = 0.3f, mix = 0.0f, lpL = 0.0f, lpR = 0.0f;
+    std::vector<float> bufL, bufR;
+};
+
 inline float softLimit(float x) {
     const float t = 0.85f;
     const float a = std::fabs(x);

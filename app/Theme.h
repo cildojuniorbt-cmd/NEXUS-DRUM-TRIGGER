@@ -124,6 +124,19 @@ public:
     void drawLinearSlider(juce::Graphics& g, int x, int y, int w, int h, float pos, float minPos, float maxPos,
                           juce::Slider::SliderStyle style, juce::Slider& s) override {
         using namespace juce;
+        if (style == Slider::LinearVertical) {
+            const float cx = static_cast<float>(x) + static_cast<float>(w) * 0.5f;
+            Rectangle<float> tr(cx - 3.0f, static_cast<float>(y) + 2.0f, 6.0f, static_cast<float>(h) - 4.0f);
+            g.setColour(theme::track); g.fillRoundedRectangle(tr, 3.0f);
+            auto fill = tr.withTop(pos);
+            g.setColour(theme::accent.withAlpha(0.25f)); g.fillRoundedRectangle(fill.expanded(2.5f, 0), 5.0f);
+            g.setColour(theme::accent); g.fillRoundedRectangle(fill, 3.0f);
+            Rectangle<float> cap(cx - 15.0f, pos - 8.0f, 30.0f, 16.0f);
+            g.setColour(Colour(0xfff4fff4)); g.fillRoundedRectangle(cap, 4.0f);
+            g.setColour(theme::accent); g.drawRoundedRectangle(cap, 4.0f, 2.0f);
+            g.setColour(Colours::black.withAlpha(0.5f)); g.fillRect(cx - 9.0f, pos - 0.5f, 18.0f, 1.2f);
+            return;
+        }
         if (style != Slider::LinearHorizontal) { LookAndFeel_V4::drawLinearSlider(g, x, y, w, h, pos, minPos, maxPos, style, s); return; }
         const float cy = static_cast<float>(y) + static_cast<float>(h) * 0.5f;
         Rectangle<float> tr(static_cast<float>(x) + 2.0f, cy - 3.0f, static_cast<float>(w) - 4.0f, 6.0f);

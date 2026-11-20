@@ -19,6 +19,7 @@ inline std::vector<ParamEntry> makeParamTable(nexus::EngineParams& p) {
     auto addPad = [&](const juce::String& s, nexus::PadParams& q) {
         I(s + "sound", q.sound); I(s + "inCh", q.inputChannel); I(s + "out", q.outRoute); F(s + "level", q.level); F(s + "pitch", q.pitchSemis); F(s + "pan", q.pan);
         F(s + "inGain", q.inputGainDb); F(s + "thr", q.thresholdDb); F(s + "retrig", q.retriggerMs); F(s + "hold", q.holdMs);
+        B(s + "mute", q.mute); B(s + "solo", q.solo);
         F(s + "hp", q.hpHz); F(s + "lp", q.lpHz); F(s + "dyn", q.dynamics); F(s + "sens", q.velocitySens);
     };
     for (int n = 0; n < nexus::kNumPads; ++n) addPad("pad" + juce::String(n + 1) + "_", p.pad[n]);
@@ -27,6 +28,13 @@ inline std::vector<ParamEntry> makeParamTable(nexus::EngineParams& p) {
     for (int z = 0; z < nexus::kNumZones; ++z)
         for (int b = 0; b < nexus::kBands; ++b) F("prof" + juce::String(z) + "_" + juce::String(b), p.profile[z][b]);
     F("blend", p.blend); B("antiFeedback", p.antiFeedback);
+    F("mEqLow", p.mEqLowDb); F("mEqMid", p.mEqMidDb); F("mEqHigh", p.mEqHighDb); B("mEqOn", p.mEqOn);
+    F("mCompThr", p.mCompThresholdDb); F("mCompRatio", p.mCompRatio); F("mCompAtt", p.mCompAttackMs);
+    F("mCompRel", p.mCompReleaseMs); F("mCompMakeup", p.mCompMakeupDb); B("mCompOn", p.mCompOn);
+    F("delayMs", p.delayMs); F("delayFb", p.delayFeedback); F("delayMix", p.delayMix);
+    for (int n = 0; n < 8; ++n) I("midiNote" + juce::String(n), p.midiNote[n]);
+    for (int n = 0; n < 6; ++n) I("midiZoneNote" + juce::String(n), p.midiZoneNote[n]);
+    B("midiOut", p.midiOutOn); I("midiOutCh", p.midiOutChannel);
     F("bleed", p.bleedReject); F("master", p.master);
     F("revRoom", p.reverbRoom); F("revDamp", p.reverbDamp); F("revWet", p.reverbWet);
     F("electronic", p.electronicLevel); F("acoustic", p.acousticLevel); F("width", p.stereoWidth);

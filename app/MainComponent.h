@@ -44,9 +44,9 @@ private:
     std::vector<float> outL, outR;
     std::vector<std::vector<float>> outX;
 
-    std::unique_ptr<PageBase> pages[5];
+    std::unique_ptr<PageBase> pages[8];
     int currentPage = 0, currentKit = -1;
-    std::unique_ptr<NavButton> nav[5];
+    std::unique_ptr<NavButton> nav[8];
     juce::TextButton kitBtn, kitPrev, kitNext, gearBtn;
     std::shared_ptr<juce::FileChooser> chooser;
     juce::Rectangle<int> kitRect, statusRect;
