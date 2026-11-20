@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include "Biquad.h"
 #include <algorithm>
 #include <cmath>
@@ -18,8 +19,20 @@ struct Sound {
 // Banco de sons sintetizados (gerados no código; sem arquivos externos).
 class SoundBank {
 public:
+    static constexpr int kMaxSounds = 160;   // capacidade fixa: o vetor nunca realoca, então a interface pode importar sons com o áudio rodando
+    SoundBank() { sounds.reserve(kMaxSounds); }
+    int builtInCount() const { return 16; }
+
+    // Som importado pelo usuário (mono, já na taxa de amostragem do motor). Retorna o índice ou -1 se a biblioteca estiver cheia.
+    int addCustom(const std::string& name, std::vector<float> data) {
+        if (data.size() < 64 || static_cast<int>(sounds.size()) >= kMaxSounds) return -1;
+        add(name.c_str(), "Meus sons", 0, std::move(data));
+        return static_cast<int>(sounds.size()) - 1;
+    }
+
     void build(double fs) {
-        sounds.clear();
+        count.store(0, std::memory_order_release);
+        sounds.clear(); sounds.reserve(kMaxSounds);
         add("Bumbo 808", "Bumbo", 0, kick(fs, 150, 42, 0.060, 0.80, 0.25f));
         add("Bumbo Seco", "Bumbo", 0, kick(fs, 130, 58, 0.030, 0.22, 0.60f));
         add("Bumbo Rock", "Bumbo", 0, kick(fs, 105, 62, 0.040, 0.34, 0.45f, true));
@@ -38,11 +51,12 @@ public:
         add("Prato Condução (Ride)", "Prato", 0, ride(fs));
     }
 
-    int size() const { return static_cast<int>(sounds.size()); }
+    int size() const { return count.load(std::memory_order_acquire); }
     const Sound& get(int i) const { return sounds[static_cast<size_t>(std::min(std::max(i, 0), size() - 1))]; }
 
 private:
     std::vector<Sound> sounds;
+    std::atomic<int> count{0};
 
     // ruído determinístico (mesmo som em toda execução)
     struct Rng {
@@ -60,6 +74,7 @@ private:
         for (size_t i = 0; i < fade; ++i) d[d.size() - 1 - i] *= static_cast<float>(i) / static_cast<float>(fade);
         Sound s; s.name = name; s.category = cat; s.chokeGroup = choke; s.data = std::move(d);
         sounds.push_back(std::move(s));
+        count.store(static_cast<int>(sounds.size()), std::memory_order_release);
     }
 
     static std::vector<float> kick(double fs, double f0, double f1, double sweepSec, double decaySec, float click, bool thump = false) {

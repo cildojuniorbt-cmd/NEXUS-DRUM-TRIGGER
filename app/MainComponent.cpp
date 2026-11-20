@@ -105,6 +105,9 @@ public:
                 Path a1; a1.addCentredArc(c.x + 3.0f, c.y, 6.0f, 6.0f, 0.0f, 0.6f, 2.5f, true);
                 g.strokePath(a1, PathStrokeType(2.0f, PathStrokeType::curved, PathStrokeType::rounded));
                 break; }
+            case 4: { // grade (módulo)
+                for (int a = 0; a < 3; ++a) for (int bb = 0; bb < 3; ++bb) g.fillRoundedRectangle(b.getX() + 1.0f + static_cast<float>(a) * 7.5f, b.getY() + 1.0f + static_cast<float>(bb) * 7.5f, 5.5f, 5.5f, 1.5f);
+                break; }
             default: { // paleta
                 g.drawEllipse(b.reduced(2.0f), 2.0f);
                 g.fillEllipse(c.x - 5.5f, c.y - 4.0f, 3.6f, 3.6f); g.fillEllipse(c.x + 1.5f, c.y - 5.0f, 3.6f, 3.6f); g.fillEllipse(c.x - 1.5f, c.y + 2.0f, 3.6f, 3.6f);
@@ -123,9 +126,10 @@ private:
 // ============================================================================
 class MainComponent::TriggerPage : public PageBase {
 public:
-    TriggerPage(nexus::Engine& e, std::function<void()> changed)
-        : engine(e), visual(e, false), det(e, changed), sound(e, changed), tune(e, changed), lib(e, changed),
-          input(e), detector(theme::u8("Anti-vazamento")), reverb(theme::u8("Ambiência (Reverb)")), out(theme::u8("Saída")) {
+    void setImportHandler(std::function<void()> f) { lib.onImport = std::move(f); }
+    TriggerPage(nexus::Engine& e, std::function<void()> changed, int maxPadsIn)
+        : engine(e), maxPads(maxPadsIn), visual(e, false), det(e, changed), sound(e, changed), tune(e, changed), lib(e, changed),
+          input(e), detector(theme::u8("Vazamento")), reverb(theme::u8("Ambiência (Reverb)")), out(theme::u8("Saída")) {
         auto& p = e.params;
         detector.add(theme::u8("Rejeição"), 0, 1, 0.01, "", 0.0, 2, [&p] { return p.bleedReject.load(); }, [&p](float v) { p.bleedReject = v; }, changed);
         reverb.add("Sala", 0, 1, 0.01, "", 0.5, 2, [&p] { return p.reverbRoom.load(); }, [&p](float v) { p.reverbRoom = v; }, changed);
@@ -134,17 +138,22 @@ public:
         out.add("Volume geral", 0, 1.2, 0.01, "", 0.9, 2, [&p] { return p.master.load(); }, [&p](float v) { p.master = v; }, changed);
 
         for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &detector, &reverb, &out, &padsLbl, &padsMinus, &padsPlus, &testBtn}) addAndMakeVisible(c);
+        visual.maxPads = maxPads;
+        const bool few = maxPads <= 2;
+        padsLbl.setVisible(!few); padsMinus.setVisible(!few); padsPlus.setVisible(!few);
+        det.maxInputs = maxPads;
         for (int i = 0; i < nexus::kNumPads; ++i) {
+            padBtn[i].setVisible(i < maxPads);
             padBtn[i].setClickingTogglesState(true);
             padBtn[i].setRadioGroupId(101);
-            padBtn[i].setButtonText(theme::u8(DrumVisual::kNames[i]));
+            padBtn[i].setButtonText(theme::u8(i == 2 ? "CHIMB." : DrumVisual::kNames[i]));
             padBtn[i].onClick = [this, i] { select(i); };
             addAndMakeVisible(padBtn[i]);
         }
         padsLbl.setFont(theme::font(12.5f, true)); padsLbl.setColour(Label::textColourId, theme::muted); padsLbl.setJustificationType(Justification::centred);
         padsMinus.setButtonText("-"); padsPlus.setButtonText("+");
         padsMinus.onClick = [this, changed] { engine.params.activePads = jmax(1, engine.params.activePads.load() - 1); changed(); };
-        padsPlus.onClick = [this, changed] { engine.params.activePads = jmin(nexus::kNumPads, engine.params.activePads.load() + 1); changed(); };
+        padsPlus.onClick = [this, changed] { engine.params.activePads = jmin(maxPads, engine.params.activePads.load() + 1); changed(); };
         testBtn.setButtonText(theme::u8("▶ Testar"));
         testBtn.onClick = [this] { engine.params.manualHit[selected] = 900; };
         visual.onSelect = [this, changed](int i) { if (i >= engine.params.activePads.load()) { engine.params.activePads = i + 1; changed(); } select(i); };
@@ -159,14 +168,14 @@ public:
         det.refresh(); sound.refresh(); tune.refresh(); lib.refresh();
         detector.refresh(); reverb.refresh(); out.refresh();
         const int act = engine.params.activePads.load();
-        for (int i = 0; i < nexus::kNumPads; ++i) {
+        for (int i = 0; i < maxPads; ++i) {
             padBtn[i].setToggleState(selected == i, dontSendNotification);
-            padBtn[i].setAlpha(i < act ? 1.0f : 0.4f);
+            padBtn[i].setAlpha(i < jmax(act, maxPads <= 2 ? 2 : 0) ? 1.0f : 0.4f);
         }
         padsLbl.setText(theme::u8("Pads: ") + String(act), dontSendNotification);
         visual.repaint();
     }
-    void setInputs(int n) override { input.setCount(n, false); }
+    void setInputs(int n) override { input.setCount(maxPads <= 2 ? jmin(n, 2) : n, false); }
     void tick() override { visual.tick(); input.tick(); }
     void resized() override {
         auto r = getLocalBounds();
@@ -179,14 +188,15 @@ public:
         auto B = r.removeFromBottom(46); r.removeFromBottom(10);
         visual.setBounds(r);
         testBtn.setBounds(B.removeFromRight(92)); B.removeFromRight(8);
-        padsPlus.setBounds(B.removeFromRight(36)); padsLbl.setBounds(B.removeFromRight(70)); padsMinus.setBounds(B.removeFromRight(36)); B.removeFromRight(10);
-        const int w = B.getWidth() / nexus::kNumPads;
-        for (int i = 0; i < nexus::kNumPads; ++i) padBtn[i].setBounds(B.removeFromLeft(w).reduced(2, 0));
+        if (maxPads > 2) { padsPlus.setBounds(B.removeFromRight(36)); padsLbl.setBounds(B.removeFromRight(70)); padsMinus.setBounds(B.removeFromRight(36)); B.removeFromRight(10); }
+        if (maxPads <= 2) { const int w2 = 150; for (int i = 0; i < maxPads; ++i) padBtn[i].setBounds(B.removeFromLeft(w2).reduced(2, 0)); }
+        else { const int w = B.getWidth() / maxPads; for (int i = 0; i < maxPads; ++i) padBtn[i].setBounds(B.removeFromLeft(w).reduced(2, 0)); }
         tune.setBounds(C.removeFromRight(340)); C.removeFromRight(10); sound.setBounds(C);
         out.setBounds(D.removeFromRight(200)); D.removeFromRight(10); detector.setBounds(D.removeFromRight(200)); D.removeFromRight(10); reverb.setBounds(D);
     }
 private:
     nexus::Engine& engine;
+    int maxPads;
     int selected = 0;
     DrumVisual visual;
     DetectionCard det; SoundPanel sound; TuneCard tune; LibraryCard lib; InputCard input;
@@ -200,6 +210,7 @@ private:
 // ============================================================================
 class MainComponent::EadPage : public PageBase {
 public:
+    void setImportHandler(std::function<void()> f) { lib.onImport = std::move(f); }
     EadPage(nexus::Engine& e, std::function<void()> changed)
         : engine(e), visual(e, true), det(e, changed), sound(e, changed), tune(e, changed), lib(e, changed),
           input(e), eq(theme::u8("Equalizador")), comp("Compressor", true), reverb(theme::u8("Ambiência (Reverb)")), mix(theme::u8("Mistura")),
@@ -417,19 +428,28 @@ MainComponent::MainComponent() {
     LookAndFeel::setDefaultLookAndFeel(&lnf);
 
     engine.prepare(48000.0); // monta o banco de sons para a interface (refeito em prepareToPlay)
+    loadCustomSounds();
     loadPreset(engine.params, dataDir().getChildFile("ultima-sessao.ndtkit"));
     engine.params.mode = static_cast<int>(nexus::Mode::Module);
 
     auto changed = [this] { refreshAll(); };
-    pages[0] = std::unique_ptr<PageBase>(new TriggerPage(engine, changed));
-    pages[1] = std::unique_ptr<PageBase>(new EadPage(engine, changed));
-    pages[2] = std::unique_ptr<PageBase>(new AudioPage(deviceManager));
-    pages[3] = std::unique_ptr<PageBase>(new LookPage([this] { applyTheme(); }));
+    pages[0] = std::unique_ptr<PageBase>(new TriggerPage(engine, changed, 2));
+    pages[1] = std::unique_ptr<PageBase>(new TriggerPage(engine, changed, nexus::kNumPads));
+    pages[2] = std::unique_ptr<PageBase>(new EadPage(engine, changed));
+    pages[3] = std::unique_ptr<PageBase>(new AudioPage(deviceManager));
+    pages[4] = std::unique_ptr<PageBase>(new LookPage([this] { applyTheme(); }));
     for (auto& p : pages) addChildComponent(*p);
+    {
+        auto imp = [this] { importSounds(); };
+        static_cast<TriggerPage*>(pages[0].get())->setImportHandler(imp);
+        static_cast<TriggerPage*>(pages[1].get())->setImportHandler(imp);
+        static_cast<EadPage*>(pages[2].get())->setImportHandler(imp);
+    }
 
-    const String labels[] = {"Trigger", "EAD", theme::u8("Áudio"), theme::u8("Aparência")};
-    for (int i = 0; i < 4; ++i) {
-        nav[i] = std::make_unique<NavButton>(labels[i], i);
+    const String labels[] = {"Trigger", theme::u8("Bateria eletrônica"), "EAD", theme::u8("Áudio"), theme::u8("Aparência")};
+    for (int i = 0; i < 5; ++i) {
+        static const int icons[] = {0, 4, 1, 2, 3};
+        nav[i] = std::make_unique<NavButton>(labels[i], icons[i]);
         nav[i]->onClick = [this, i] { showPage(i); };
         addAndMakeVisible(*nav[i]);
     }
@@ -439,7 +459,7 @@ MainComponent::MainComponent() {
     kitPrev.onClick = [this] { stepKit(-1); }; kitNext.onClick = [this] { stepKit(+1); };
     kitBtn.onClick = [this] { showKitMenu(); };
     gearBtn.setButtonText(theme::u8("⚙"));
-    gearBtn.onClick = [this] { showPage(2); };
+    gearBtn.onClick = [this] { showPage(3); };
     kitBtn.setButtonText(theme::u8("Kit atual"));
     kitBtn.setColour(TextButton::textColourOffId, theme::text);
 
@@ -465,7 +485,10 @@ MainComponent::~MainComponent() {
 void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate) {
     const size_t cap = static_cast<size_t>(jmax(256, samplesPerBlockExpected));
     inBuf.assign(nexus::kMaxInputs, std::vector<float>(cap, 0.0f)); outL.assign(cap, 0.0f); outR.assign(cap, 0.0f);
+    currentFs = sampleRate;
     engine.prepare(sampleRate);
+    loadCustomSounds();
+    MessageManager::callAsync([this] { refreshAll(); });
 }
 
 void MainComponent::getNextAudioBlock(const AudioSourceChannelInfo& info) {
@@ -500,11 +523,63 @@ void MainComponent::getNextAudioBlock(const AudioSourceChannelInfo& info) {
     }
 }
 
+int MainComponent::loadWavInto(const File& f) {
+    AudioFormatManager fm; fm.registerBasicFormats();
+    std::unique_ptr<AudioFormatReader> rd(fm.createReaderFor(f));
+    if (rd == nullptr || rd->lengthInSamples < 64 || rd->sampleRate <= 0) return -1;
+    const int64 len = jmin<int64>(rd->lengthInSamples, static_cast<int64>(rd->sampleRate * 10.0));
+    AudioBuffer<float> buf(static_cast<int>(rd->numChannels), static_cast<int>(len));
+    rd->read(&buf, 0, static_cast<int>(len), 0, true, true);
+    std::vector<float> mono(static_cast<size_t>(len));
+    for (int i = 0; i < len; ++i) { float v = 0.0f; for (int c = 0; c < buf.getNumChannels(); ++c) v += buf.getSample(c, i); mono[static_cast<size_t>(i)] = v / static_cast<float>(jmax(1, buf.getNumChannels())); }
+    const double ratio = currentFs / rd->sampleRate;
+    std::vector<float> out;
+    if (std::abs(ratio - 1.0) < 1e-6) out = std::move(mono);
+    else {
+        const size_t n = static_cast<size_t>(static_cast<double>(mono.size()) * ratio);
+        out.resize(n);
+        for (size_t i = 0; i < n; ++i) {
+            const double pos = static_cast<double>(i) / ratio; const size_t i0 = static_cast<size_t>(pos);
+            const float fr = static_cast<float>(pos - static_cast<double>(i0));
+            const float a = mono[jmin(i0, mono.size() - 1)], b = mono[jmin(i0 + 1, mono.size() - 1)];
+            out[i] = a + (b - a) * fr;
+        }
+    }
+    String name = f.getFileNameWithoutExtension();
+    if (name.length() > 4 && name[3] == '_' && name.substring(0, 3).containsOnly("0123456789")) name = name.substring(4);
+    return engine.soundBank().addCustom(name.toStdString(), std::move(out));
+}
+
+void MainComponent::loadCustomSounds() {
+    auto files = dataDir().getChildFile("Sons").findChildFiles(File::findFiles, false, "*.*");
+    files.sort();
+    for (auto& f : files) loadWavInto(f);
+}
+
+void MainComponent::importSounds() {
+    const auto dir = dataDir().getChildFile("Sons"); dir.createDirectory();
+    chooser = std::make_shared<FileChooser>("Importar sons (WAV, AIFF, FLAC)", File::getSpecialLocation(File::userMusicDirectory), "*.wav;*.aif;*.aiff;*.flac;*.ogg");
+    chooser->launchAsync(FileBrowserComponent::openMode | FileBrowserComponent::canSelectMultipleItems | FileBrowserComponent::canSelectFiles,
+                         [this, dir](const FileChooser& fc) {
+                             int last = -1;
+                             for (auto& f : fc.getResults()) {
+                                 int next = dir.getNumberOfChildFiles(File::findFiles) + 1;
+                                 const auto dest = dir.getChildFile(String::formatted("%03d_", next) + f.getFileName());
+                                 if (!f.copyFileTo(dest)) continue;
+                                 const int idx = loadWavInto(dest);
+                                 if (idx >= 0) last = idx;
+                             }
+                             if (last >= 0) { engine.params.previewSound = last; refreshAll(); }
+                         });
+}
+
 void MainComponent::showPage(int index) {
+    if (currentPage == 1) modulePads = jmax(2, engine.params.activePads.load());
     currentPage = index;
-    for (int i = 0; i < 4; ++i) { pages[i]->setVisible(i == index); nav[i]->setToggleState(i == index, dontSendNotification); }
-    if (index == 0) engine.params.mode = static_cast<int>(nexus::Mode::Module);
-    else if (index == 1) engine.params.mode = static_cast<int>(nexus::Mode::Hybrid);
+    for (int i = 0; i < 5; ++i) { pages[i]->setVisible(i == index); nav[i]->setToggleState(i == index, dontSendNotification); }
+    if (index == 0) { engine.params.mode = static_cast<int>(nexus::Mode::Module); engine.params.activePads = 2; }
+    else if (index == 1) { engine.params.mode = static_cast<int>(nexus::Mode::Module); engine.params.activePads = jmax(2, modulePads); }
+    else if (index == 2) engine.params.mode = static_cast<int>(nexus::Mode::Hybrid);
     refreshAll();
     repaint();
 }
@@ -658,7 +733,7 @@ void MainComponent::resized() {
     gearBtn.setBounds(header.getRight() - 64, 14, 48, 44);
 
     auto side = r.removeFromLeft(200).withTrimmedTop(14);
-    for (int i = 0; i < 4; ++i) nav[i]->setBounds(side.removeFromTop(54));
+    for (int i = 0; i < 5; ++i) nav[i]->setBounds(side.removeFromTop(54));
     auto area = r.reduced(10);
     for (auto& p : pages) p->setBounds(area);
 }

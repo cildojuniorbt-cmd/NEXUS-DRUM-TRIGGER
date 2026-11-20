@@ -31,6 +31,11 @@ private:
     void saveKit();
     void loadKit();
     juce::File dataDir() const;
+    void loadCustomSounds();
+    void importSounds();
+    int loadWavInto(const juce::File& f);
+    double currentFs = 48000.0;
+    int modulePads = 4;
 
     NexusLnF lnf;
     nexus::Engine engine;
@@ -38,9 +43,9 @@ private:
     const float* inPtr[nexus::kMaxInputs] = {};
     std::vector<float> outL, outR;
 
-    std::unique_ptr<PageBase> pages[4];
+    std::unique_ptr<PageBase> pages[5];
     int currentPage = 0, currentKit = -1;
-    std::unique_ptr<NavButton> nav[4];
+    std::unique_ptr<NavButton> nav[5];
     juce::TextButton kitBtn, kitPrev, kitNext, gearBtn;
     std::shared_ptr<juce::FileChooser> chooser;
     juce::Rectangle<int> kitRect, statusRect;

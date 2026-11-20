@@ -23,7 +23,8 @@ public:
     std::function<void(int)> onSelect;
     int selected = 0;
 
-    int numShown() const { return hybrid ? nexus::kNumZones : nexus::kNumPads; }
+    int maxPads = nexus::kNumPads;   // 2 na aba Trigger, 8 na aba Módulo
+    int numShown() const { return hybrid ? nexus::kNumZones : maxPads; }
     bool isActive(int i) const { return hybrid || i < engine.params.activePads.load(); }
 
     void tick() {
@@ -154,6 +155,7 @@ private:
 // ---------------------------------------------------------------- Detecção (trigger) do pad
 class DetectionCard : public Card {
 public:
+    int maxInputs = nexus::kMaxInputs;
     bool zone = false;   // true = editar uma zona do EAD em vez de um pad
     DetectionCard(nexus::Engine& e, std::function<void()> changed)
         : Card("Detecção (Trigger)"), engine(e),
@@ -180,6 +182,8 @@ public:
     void refresh() {
         for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->refresh();
         inSel.setVisible(!zone); inLbl.setVisible(!zone);
+        if (inSel.getNumItems() != nexus::kMaxInputs) {}
+        if (maxInputs < nexus::kMaxInputs && inSel.getNumItems() > maxInputs) { inSel.clear(juce::dontSendNotification); for (int i = 1; i <= maxInputs; ++i) inSel.addItem(theme::u8("Entrada ") + juce::String(i), i); }
         if (!zone) inSel.setSelectedId(pp(engine, zone, pad).inputChannel.load() + 1, juce::dontSendNotification);
         resized();
     }
@@ -299,23 +303,37 @@ class LibraryCard : public Card, private juce::ListBoxModel {
 public:
     bool zone = false;   // true = editar uma zona do EAD em vez de um pad
     LibraryCard(nexus::Engine& e, std::function<void()> changed) : Card(theme::u8("Biblioteca de sons")), engine(e), changed(std::move(changed)) {
+        importBtn.setButtonText(theme::u8("+  Importar sons (WAV)"));
+        importBtn.onClick = [this] { if (onImport) onImport(); };
+        addAndMakeVisible(importBtn);
+        rebuild();
+        list.setModel(this); list.setRowHeight(30); list.setOutlineThickness(0);
+        list.getVerticalScrollBar().setColour(juce::ScrollBar::thumbColourId, theme::edge.brighter(0.5f));
+        addAndMakeVisible(list);
+    }
+    void setPad(int p) { pad = p; refresh(); }
+    std::function<void()> onImport;
+    void refresh() { if (builtCount != engine.sounds().size()) { rebuild(); list.updateContent(); } list.repaint(); }
+    void resized() override {
+        Card::resized();
+        auto r = content().expanded(4, 0);
+        importBtn.setBounds(r.removeFromBottom(34).reduced(4, 0)); r.removeFromBottom(4);
+        list.setBounds(r);
+    }
+
+private:
+    struct Row { bool header; std::string text; int sound; };
+    void rebuild() {
         const auto& bank = engine.sounds();
+        builtCount = bank.size();
+        rows.clear();
         std::vector<std::string> cats;
         for (int i = 0; i < bank.size(); ++i) if (std::find(cats.begin(), cats.end(), bank.get(i).category) == cats.end()) cats.push_back(bank.get(i).category);
         for (const auto& c : cats) {
             rows.push_back({true, c, -1});
             for (int i = 0; i < bank.size(); ++i) if (bank.get(i).category == c) rows.push_back({false, bank.get(i).name, i});
         }
-        list.setModel(this); list.setRowHeight(30); list.setOutlineThickness(0);
-        list.getVerticalScrollBar().setColour(juce::ScrollBar::thumbColourId, theme::edge.brighter(0.5f));
-        addAndMakeVisible(list);
     }
-    void setPad(int p) { pad = p; refresh(); }
-    void refresh() { list.repaint(); }
-    void resized() override { Card::resized(); list.setBounds(content().expanded(4, 0)); }
-
-private:
-    struct Row { bool header; std::string text; int sound; };
     int getNumRows() override { return static_cast<int>(rows.size()); }
     void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool) override {
         using namespace juce;
@@ -348,7 +366,9 @@ private:
     std::function<void()> changed;
     int pad = 0;
     std::vector<Row> rows;
+    int builtCount = 0;
     juce::ListBox list;
+    juce::TextButton importBtn;
 };
 
 // ---------------------------------------------------------------- Nível de entrada (até 8 entradas)

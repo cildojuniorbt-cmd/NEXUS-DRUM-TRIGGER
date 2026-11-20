@@ -101,6 +101,7 @@ public:
     }
 
     const SoundBank& sounds() const { return bank; }
+    SoundBank& soundBank() { return bank; }
 
     // inputs: um ponteiro por canal de entrada da interface (nIn canais). Saída estéreo.
     void processBlock(const float* const* inputs, int nIn, float* outL, float* outR, int n) {
