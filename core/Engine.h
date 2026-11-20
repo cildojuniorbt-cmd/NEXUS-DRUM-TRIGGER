@@ -28,6 +28,7 @@ struct PadParams {
     std::atomic<float> inputGainDb{0.0f};
     std::atomic<float> thresholdDb{-36.0f};
     std::atomic<float> retriggerMs{70.0f};
+    std::atomic<float> holdMs{2.5f};         // tempo de leitura do pico (mede a força da batida; mais tempo = mais preciso, mais atraso)
     std::atomic<float> hpHz{60.0f};
     std::atomic<float> lpHz{6000.0f};
     std::atomic<float> dynamics{1.0f};       // curva de velocity
@@ -60,6 +61,7 @@ struct EngineParams {
     // Comandos vindos da interface
     std::atomic<int> manualHit[kNumPads] = {{0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}};  // velocity*1000 (0 = nenhum)
     std::atomic<int> manualZone[kNumZones] = {{0}, {0}, {0}, {0}, {0}, {0}};
+    std::atomic<bool> learn{false};          // "Aprender": a próxima batida seleciona a peça/entrada
     std::atomic<int> calibZone{-1};          // >=0: aprendendo o som dessa peça
     std::atomic<float> profile[kNumZones][kBands];   // impressão digital de cada peça (0 = usar o padrão)
     std::atomic<float> blend{0.5f};          // 0 = só acústico, 1 = só kit eletrônico
@@ -96,6 +98,8 @@ struct EngineStatus {
     std::atomic<float> gainReductionDb{0.0f};
     std::atomic<int> calibCount{0};      // batidas capturadas na calibração em andamento
     std::atomic<int> calibDone{-1};      // última zona calibrada (para a interface avisar)
+    std::atomic<int> learnedInput{-1};   // entrada em que a batida foi ouvida (modo Aprender)
+    std::atomic<int> learnedZone{-1};    // peça reconhecida (modo Aprender, EAD)
 };
 
 class Engine {
@@ -181,6 +185,10 @@ public:
                 x[c] = (c < nIn && inputs[c]) ? inputs[c][i] : 0.0f;
                 inPeak[c] = std::max(inPeak[c], std::fabs(x[c]));
             }
+            if (params.learn.load(std::memory_order_relaxed) && !hybrid) {
+                for (int c = 0; c < kMaxInputs; ++c)
+                    if (std::fabs(x[c]) > 0.03f) { status.learnedInput.store(c); params.learn.store(false); break; }
+            }
             if (aecOn) { for (int c = 0; c < 2; ++c) x[c] = aec[c].process(prevOut, x[c], true); }
 
             // 1) detecção
@@ -242,7 +250,7 @@ private:
     static TriggerDetector::Settings settingsOf(const PadParams& pp) {
         TriggerDetector::Settings s;
         s.inputGainDb = pp.inputGainDb.load(); s.thresholdDb = pp.thresholdDb.load();
-        s.retriggerMs = pp.retriggerMs.load(); s.hpHz = pp.hpHz.load(); s.lpHz = pp.lpHz.load();
+        s.retriggerMs = pp.retriggerMs.load(); s.scanMs = pp.holdMs.load(); s.hpHz = pp.hpHz.load(); s.lpHz = pp.lpHz.load();
         s.dynamics = pp.dynamics.load();
         return s;
     }
@@ -258,6 +266,11 @@ private:
     };
 
     void onSpectral(const SpectralHit& sh) {
+        if (params.learn.load() && params.calibZone.load() < 0) {
+            int best = -1; float bl = 0.0f;
+            for (int j = 0; j < sh.count; ++j) if (sh.level[j] > bl) { bl = sh.level[j]; best = sh.zone[j]; }
+            if (best >= 0) { status.learnedZone.store(best); params.learn.store(false); }
+        }
         const int cal = params.calibZone.load();
         if (cal != calSeen) { calSeen = cal; calN = 0; for (auto& v : calSum) v = 0.0f; status.calibCount.store(0); }
         if (cal >= 0 && cal < kNumZones) {

@@ -142,7 +142,7 @@ public:
         reverb.add("Quantidade", 0, 1, 0.01, "", 0.0, 2, [&p] { return p.reverbWet.load(); }, [&p](float v) { p.reverbWet = v; }, changed);
         out.add("Volume geral", 0, 1.2, 0.01, "", 0.9, 2, [&p] { return p.master.load(); }, [&p](float v) { p.master = v; }, changed);
 
-        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &detector, &reverb, &out, &padsLbl, &padsMinus, &padsPlus, &testBtn}) addAndMakeVisible(c);
+        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &detector, &reverb, &out, &padsLbl, &padsMinus, &padsPlus, &testBtn, &learnBtn}) addAndMakeVisible(c);
         visual.maxPads = maxPads;
         const bool few = maxPads <= 2;
         padsLbl.setVisible(!few); padsMinus.setVisible(!few); padsPlus.setVisible(!few);
@@ -162,6 +162,11 @@ public:
         padsPlus.onClick = [this, changed] { engine.params.activePads = jmin(maxPads, engine.params.activePads.load() + 1); changed(); };
         testBtn.setButtonText(theme::u8("▶ Testar"));
         testBtn.onClick = [this] { engine.params.manualHit[selected] = 900; };
+        learnBtn.setButtonText("Aprender");
+        learnBtn.onClick = [this] {
+            if (engine.params.learn.load()) { engine.params.learn = false; learnTicks = 0; }
+            else { engine.status.learnedInput = -1; engine.params.learn = true; learnTicks = 300; }
+        };
         visual.onSelect = [this, changed](int i) { if (i >= engine.params.activePads.load()) { engine.params.activePads = i + 1; changed(); } select(i); };
         select(0);
     }
@@ -182,7 +187,22 @@ public:
         visual.repaint();
     }
     void setInputs(int n) override { input.setCount(maxPads <= 2 ? jmin(n, 2) : n, false); }
-    void tick() override { visual.tick(); input.tick(); }
+    void tick() override {
+        visual.tick(); input.tick();
+        if (engine.params.learn.load()) {
+            learnBtn.setButtonText(theme::u8("Toque na peça…"));
+            if (--learnTicks <= 0) engine.params.learn = false;
+        } else learnBtn.setButtonText("Aprender");
+        const int ch = engine.status.learnedInput.exchange(-1);
+        if (ch >= 0) {
+            if (ch >= maxPads) { engine.params.learn = true; return; }   // entrada que esta aba não usa: continua ouvindo
+            int pad = -1;
+            for (int p = 0; p < maxPads && pad < 0; ++p) if (engine.params.pad[p].inputChannel.load() == ch) pad = p;
+            if (pad < 0) { engine.params.pad[selected].inputChannel = ch; pad = selected; }
+            if (pad >= engine.params.activePads.load()) engine.params.activePads = pad + 1;
+            select(pad);
+        }
+    }
     void resized() override {
         auto r = getLocalBounds();
         auto right = r.removeFromRight(300); r.removeFromRight(10);
@@ -193,8 +213,9 @@ public:
         auto C = r.removeFromBottom(150); r.removeFromBottom(10);
         auto B = r.removeFromBottom(46); r.removeFromBottom(10);
         visual.setBounds(r);
-        testBtn.setBounds(B.removeFromRight(92)); B.removeFromRight(8);
-        if (maxPads > 2) { padsPlus.setBounds(B.removeFromRight(36)); padsLbl.setBounds(B.removeFromRight(70)); padsMinus.setBounds(B.removeFromRight(36)); B.removeFromRight(10); }
+        testBtn.setVisible(false);
+        learnBtn.setBounds(B.removeFromRight(110)); B.removeFromRight(8);
+        if (maxPads > 2) { padsPlus.setBounds(B.removeFromRight(32)); padsLbl.setBounds(B.removeFromRight(66)); padsMinus.setBounds(B.removeFromRight(32)); B.removeFromRight(8); }
         if (maxPads <= 2) { const int w2 = 150; for (int i = 0; i < maxPads; ++i) padBtn[i].setBounds(B.removeFromLeft(w2).reduced(2, 0)); }
         else { const int w = B.getWidth() / maxPads; for (int i = 0; i < maxPads; ++i) padBtn[i].setBounds(B.removeFromLeft(w).reduced(2, 0)); }
         tune.setBounds(C.removeFromRight(340)); C.removeFromRight(10); sound.setBounds(C);
@@ -207,7 +228,8 @@ private:
     DrumVisual visual;
     DetectionCard det; SoundPanel sound; TuneCard tune; LibraryCard lib; InputCard input;
     KnobCard detector, reverb, out;
-    TextButton padBtn[nexus::kNumPads], padsMinus, padsPlus, testBtn;
+    int learnTicks = 0;
+    TextButton padBtn[nexus::kNumPads], padsMinus, padsPlus, testBtn, learnBtn;
     Label padsLbl;
 };
 
@@ -246,7 +268,7 @@ public:
         mix.add(theme::u8("Eletrônico"), 0, 1.5, 0.01, "", 1.0, 2, [&p] { return p.electronicLevel.load(); }, [&p](float v) { p.electronicLevel = v; }, changed);
         mix.add("Volume geral", 0, 1.2, 0.01, "", 0.9, 2, [&p] { return p.master.load(); }, [&p](float v) { p.master = v; }, changed);
 
-        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &eq, &comp, &reverb, &mix, &testBtn, &calibBtn, &clearBtn, &afBtn}) addAndMakeVisible(c);
+        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &eq, &comp, &reverb, &mix, &testBtn, &calibBtn, &clearBtn, &afBtn, &learnBtn}) addAndMakeVisible(c);
         det.zone = sound.zone = tune.zone = lib.zone = true;
         for (int i = 0; i < nexus::kNumZones; ++i) {
             zoneBtn[i].setClickingTogglesState(true); zoneBtn[i].setRadioGroupId(202);
@@ -257,6 +279,11 @@ public:
         testBtn.setButtonText(theme::u8("▶ Testar"));
         testBtn.onClick = [this] { engine.params.manualZone[selected] = 900; };
         visual.onSelect = [this](int i) { select(i); };
+        learnBtn.setButtonText("Aprender");
+        learnBtn.onClick = [this] {
+            if (engine.params.learn.load()) { engine.params.learn = false; learnTicks = 0; }
+            else { engine.status.learnedZone = -1; engine.params.learn = true; learnTicks = 300; }
+        };
         calibBtn.setButtonText("Calibrar");
         calibBtn.onClick = [this, changed] {
             if (engine.params.calibZone.load() >= 0) engine.params.calibZone = -1;
@@ -289,6 +316,10 @@ public:
     }
     void tick() override {
         visual.tick(); input.tick();
+        if (engine.params.learn.load()) { learnBtn.setButtonText(theme::u8("Toque…")); if (--learnTicks <= 0) engine.params.learn = false; }
+        else learnBtn.setButtonText("Aprender");
+        const int lz = engine.status.learnedZone.exchange(-1);
+        if (lz >= 0) select(lz);
         const int cz = engine.params.calibZone.load();
         if (cz >= 0) calibBtn.setButtonText(String("Toque ") + String(engine.status.calibCount.load()) + "/8");
         else if (engine.status.calibDone.load() == selected) calibBtn.setButtonText(theme::u8("\xe2\x9c\x93 Calibrado"));
@@ -306,9 +337,10 @@ public:
         auto B = r.removeFromBottom(140); r.removeFromBottom(8);
         auto Z = r.removeFromBottom(44); r.removeFromBottom(8);
         visual.setBounds(r);
-        testBtn.setBounds(Z.removeFromRight(84)); Z.removeFromRight(4);
-        clearBtn.setBounds(Z.removeFromRight(72).reduced(1, 0));
-        calibBtn.setBounds(Z.removeFromRight(112).reduced(1, 0)); Z.removeFromRight(6);
+        testBtn.setBounds(Z.removeFromRight(76)); Z.removeFromRight(2);
+        clearBtn.setBounds(Z.removeFromRight(66).reduced(1, 0));
+        calibBtn.setBounds(Z.removeFromRight(96).reduced(1, 0));
+        learnBtn.setBounds(Z.removeFromRight(96).reduced(1, 0)); Z.removeFromRight(6);
         { const int w = Z.getWidth() / nexus::kNumZones; for (int i = 0; i < nexus::kNumZones; ++i) zoneBtn[i].setBounds(Z.removeFromLeft(w).reduced(2, 0)); }
         tune.setBounds(B.removeFromRight(340)); B.removeFromRight(10); sound.setBounds(B);
         eq.setBounds(C.removeFromLeft(C.getWidth() * 9 / 20)); C.removeFromLeft(10); comp.setBounds(C);
@@ -320,8 +352,8 @@ private:
     DrumVisual visual; DetectionCard det; SoundPanel sound; TuneCard tune; LibraryCard lib; InputCard input;
     KnobCard eq, comp, reverb, mix;
     EqCurve curve;
-    int selected = 0;
-    TextButton zoneBtn[nexus::kNumZones], testBtn, calibBtn, clearBtn, afBtn;
+    int selected = 0, learnTicks = 0;
+    TextButton zoneBtn[nexus::kNumZones], testBtn, calibBtn, clearBtn, afBtn, learnBtn;
 };
 
 // ============================================================================

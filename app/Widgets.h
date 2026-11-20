@@ -164,9 +164,10 @@ public:
           sens("Sensibilidade (ganho do mic)", -12, 36, 0.5, " dB", 1),
           thr("Limiar", -60, -6, 0.5, " dB", 1),
           retrig("Retrigger", 20, 300, 1, " ms", 0),
+          hold("Hold (leitura do pico)", 1, 20, 0.5, " ms", 1, 2.5),
           hp("Filtro grave (HP)", 20, 8000, 1, " Hz", 0, 150),
           lp("Filtro agudo (LP)", 100, 16000, 10, " Hz", 0, 3000) {
-        for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) { addAndMakeVisible(*s); s->afterChange = changed; }
+        for (auto* s : {&sens, &thr, &retrig, &hold, &hp, &lp}) { addAndMakeVisible(*s); s->afterChange = changed; }
         for (int i = 1; i <= nexus::kMaxInputs; ++i) inSel.addItem(theme::u8("Entrada ") + juce::String(i), i);
         inSel.onChange = [this, changed] { if (!zone && inSel.getSelectedId() > 0) { pp(engine, zone, pad).inputChannel = inSel.getSelectedId() - 1; changed(); } };
         addAndMakeVisible(inSel); addAndMakeVisible(inLbl);
@@ -196,8 +197,8 @@ public:
         outSel.setVisible(!zone); outLbl.setVisible(!zone);
         if (outSel.getNumItems() != maxOutputs + 1) fillOut();
         if (!zone) outSel.setSelectedId(juce::jmin(maxOutputs, pp(engine, zone, pad).outRoute.load()) + 1, juce::dontSendNotification);
-        for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->refresh();
-        hp.setVisible(!zone); lp.setVisible(!zone);
+        for (auto* s : {&sens, &thr, &retrig, &hold, &hp, &lp}) s->refresh();
+        hp.setVisible(!zone); lp.setVisible(!zone); hold.setVisible(!zone);
         inSel.setVisible(!zone); inLbl.setVisible(!zone);
         if (inSel.getNumItems() != nexus::kMaxInputs) {}
         if (maxInputs < nexus::kMaxInputs && inSel.getNumItems() > maxInputs) { inSel.clear(juce::dontSendNotification); for (int i = 1; i <= maxInputs; ++i) inSel.addItem(theme::u8("Entrada ") + juce::String(i), i); }
@@ -218,7 +219,7 @@ public:
         }
         const int h = juce::jlimit(34, 48, r.getHeight() / 5);
         if (zone) { const int h3 = juce::jlimit(34, 56, r.getHeight() / 3); for (auto* s : {&sens, &thr, &retrig}) s->setBounds(r.removeFromTop(h3)); }
-        else for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->setBounds(r.removeFromTop(h));
+        else { const int h6 = juce::jlimit(32, 46, r.getHeight() / 6); for (auto* s : {&sens, &thr, &retrig, &hold, &hp, &lp}) s->setBounds(r.removeFromTop(h6)); }
     }
 private:
     void rebind() {
@@ -226,12 +227,13 @@ private:
         sens.bind([=] { return P().inputGainDb.load(); }, [=](float v) { P().inputGainDb = v; });
         thr.bind([=] { return P().thresholdDb.load(); }, [=](float v) { P().thresholdDb = v; });
         retrig.bind([=] { return P().retriggerMs.load(); }, [=](float v) { P().retriggerMs = v; });
+        hold.bind([=] { return P().holdMs.load(); }, [=](float v) { P().holdMs = v; });
         hp.bind([=] { return P().hpHz.load(); }, [=](float v) { P().hpHz = v; });
         lp.bind([=] { return P().lpHz.load(); }, [=](float v) { P().lpHz = v; });
     }
     nexus::Engine& engine;
     int pad = 0;
-    BarSlider sens, thr, retrig, hp, lp;
+    BarSlider sens, thr, retrig, hold, hp, lp;
     juce::ComboBox inSel, outSel;
     juce::Label inLbl, outLbl;
 };

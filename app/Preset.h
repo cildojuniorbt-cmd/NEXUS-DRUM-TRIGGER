@@ -18,7 +18,7 @@ inline std::vector<ParamEntry> makeParamTable(nexus::EngineParams& p) {
     auto B = [&](const juce::String& k, std::atomic<bool>& a) { t.push_back({k, nullptr, nullptr, &a}); };
     auto addPad = [&](const juce::String& s, nexus::PadParams& q) {
         I(s + "sound", q.sound); I(s + "inCh", q.inputChannel); I(s + "out", q.outRoute); F(s + "level", q.level); F(s + "pitch", q.pitchSemis); F(s + "pan", q.pan);
-        F(s + "inGain", q.inputGainDb); F(s + "thr", q.thresholdDb); F(s + "retrig", q.retriggerMs);
+        F(s + "inGain", q.inputGainDb); F(s + "thr", q.thresholdDb); F(s + "retrig", q.retriggerMs); F(s + "hold", q.holdMs);
         F(s + "hp", q.hpHz); F(s + "lp", q.lpHz); F(s + "dyn", q.dynamics); F(s + "sens", q.velocitySens);
     };
     for (int n = 0; n < nexus::kNumPads; ++n) addPad("pad" + juce::String(n + 1) + "_", p.pad[n]);

@@ -13,6 +13,8 @@ App de bateria eletrônica para uso ao vivo (Nexus Works Digital): 2 microfones 
 - **Áudio** – interface, canais (até 8 entradas e 8 saídas), taxa e buffer (use 64–128 amostras).
 - **Aparência** – cores e fundo.
 
+**Aprender**: aperte o botão e bata na peça — o app seleciona o pad (ou a peça do EAD) correspondente. **Hold**: tempo de leitura do pico de cada batida (mais tempo = força mais precisa, com um pouco mais de atraso).
+
 Biblioteca de sons: botão **Importar sons (WAV)** (WAV, AIFF, FLAC). Kits: "Salvar kit" / "Abrir kit" (.ndtkit). A última sessão é restaurada.
 
 ## Compilar

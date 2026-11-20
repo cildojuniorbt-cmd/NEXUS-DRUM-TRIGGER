@@ -317,6 +317,23 @@ int main() {
         CHECK(energy(x3) > 1.0 && energy(x2) < 1e-9, "tom na saída 4 sai só no 4º canal da interface");
     }
 
+    { // Hold (tempo de leitura) e modo Aprender
+        Engine e; setup(e);
+        e.params.learn = true;
+        auto c = silence(3, 9600); addHit(c[2], 2000, 0.6f, 150.0f);
+        run(e, c);
+        CHECK(e.status.learnedInput.load() == 2 && !e.params.learn.load(), "Aprender: a batida na entrada 3 seleciona a entrada 3");
+        Engine h; setup(h); h.params.pad[0].holdMs = 15.0f;
+        auto c2 = silence(2, 9600); addHit(c2[0], 2000, 0.6f, 150.0f);
+        Run r = run(h, c2);
+        CHECK(r.hits[0] == 1 && r.finite, "Hold de 15 ms ainda dispara a batida");
+        Engine z; setup(z); z.params.mode = static_cast<int>(Mode::Hybrid);
+        z.params.learn = true;
+        auto c3 = silence(2, 24000); for (int k = 0; k < 2; ++k) { addHit(c3[k], 4800, 0.6f, 70.0f); }
+        run(z, c3);
+        CHECK(z.status.learnedZone.load() >= 0 && !z.params.learn.load(), "Aprender no EAD: a batida seleciona uma peça");
+    }
+
     std::printf("\n%s (%d falha%s)\n", failures ? "TESTES FALHARAM" : "TODOS OS TESTES PASSARAM", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }
