@@ -14,7 +14,6 @@ inline nexus::PadParams& pp(nexus::Engine& e, bool zone, int i) { return zone ? 
 
 class DrumVisual : public juce::Component {
 public:
-    struct Spot { const char* name; float x, y, rx, ry; };
     static constexpr int kSpots = nexus::kNumPads;
 
     DrumVisual(nexus::Engine& e, bool hybridMode) : engine(e), hybrid(hybridMode) {
@@ -55,7 +54,7 @@ public:
         g.setColour(theme::panelBot); g.fillRoundedRectangle(r, 12.0f);
         Graphics::ScopedSaveState ss(g);
         Path clip; clip.addRoundedRectangle(r, 12.0f); g.reduceClipRegion(clip);
-        if (img.isValid()) g.drawImage(img, imageBox(), RectanglePlacement::centred | RectanglePlacement::fillDestination);
+        if (img.isValid()) g.drawImage(img, imageBox(), RectanglePlacement::stretchToFit);
         // véu na cor de destaque (acompanha a cor escolhida na aba Aparência)
         g.setGradientFill(ColourGradient(theme::accent.withAlpha(0.20f), r.getCentreX(), r.getY(), Colours::transparentBlack, r.getCentreX(), r.getBottom(), true));
         g.fillRect(r);
@@ -75,7 +74,8 @@ public:
             g.setFont(theme::font(11.5f, true));
             const String t = theme::u8(hybrid ? kZoneNames[i] : kNames[i]);
             const float w = g.getCurrentFont().getStringWidthFloat(t) + 14.0f;
-            Rectangle<float> lb(c.getCentreX() - w * 0.5f, c.getCentreY() - 9.0f, w, 18.0f);
+            const auto lp = labelPos(spotOf(i));
+            Rectangle<float> lb(lp.x - w * 0.5f, lp.y - 9.0f, w, 18.0f);
             g.setColour(Colour(0xcc060807).withMultipliedAlpha(act ? 1.0f : 0.6f)); g.fillRoundedRectangle(lb, 9.0f);
             g.setColour((sel ? theme::accent : theme::edge.brighter(0.3f)).withMultipliedAlpha(act ? 1.0f : 0.5f)); g.drawRoundedRectangle(lb, 9.0f, 1.0f);
             g.setColour(act ? theme::text : theme::muted); g.drawText(t, lb, Justification::centred);
@@ -92,24 +92,41 @@ public:
 
 private:
     int spotOf(int i) const { static const int m[6] = {0, 1, 2, 3, 4, 6}; return hybrid ? m[i] : i; }
+    // a foto preenche o quadro (corta o excesso) e os círculos usam a MESMA conta, para cair em cima das peças
     juce::Rectangle<float> imageBox() const {
         const auto r = getLocalBounds().toFloat();
         if (!img.isValid()) return r;
-        const float ar = static_cast<float>(img.getWidth()) / static_cast<float>(img.getHeight());
-        float w = r.getWidth(), h = w / ar;
-        if (h > r.getHeight()) { h = r.getHeight(); w = h * ar; }
-        return Rectangle_(r.getCentreX() - w * 0.5f, r.getCentreY() - h * 0.5f, w, h);
+        const float iw = static_cast<float>(img.getWidth()), ih = static_cast<float>(img.getHeight());
+        const float sc = juce::jmax(r.getWidth() / iw, r.getHeight() / ih);
+        const float w = iw * sc, h = ih * sc;
+        return {r.getCentreX() - w * 0.5f, r.getCentreY() - h * 0.5f, w, h};
     }
-    static juce::Rectangle<float> Rectangle_(float x, float y, float w, float h) { return {x, y, w, h}; }
+    // posição de cada peça em pixels da foto kit.png (654 x 305): centro, raios e ponto da etiqueta
+    struct PixSpot { float cx, cy, rx, ry, lx, ly; };
+    static const PixSpot& pix(int i) {
+        static const PixSpot p[kSpots] = {
+            {352.0f, 330.0f, 138.0f, 138.0f, 352.0f, 292.0f}, // bumbo (pele da frente)
+            {155.0f, 236.0f,  52.0f,  64.0f, 155.0f, 236.0f}, // caixa
+            {577.0f, 143.0f,  70.0f,  14.0f, 577.0f, 162.0f}, // chimbal
+            {270.0f, 142.0f,  66.0f,  58.0f, 270.0f, 142.0f}, // tom 1
+            {408.0f, 145.0f,  61.0f,  54.0f, 408.0f, 145.0f}, // tom 2
+            {490.0f, 212.0f,  50.0f,  33.0f, 490.0f, 212.0f}, // surdo
+            {136.0f,  55.0f, 102.0f,  28.0f, 136.0f,  55.0f}, // prato 1
+            {502.0f,  56.0f,  87.0f,  22.0f, 502.0f,  56.0f}};// prato 2
+        return p[i];
+    }
     juce::Rectangle<float> spotRect(int i) const {
-        static const Spot spots[kSpots] = {
-            {"bumbo", 0.54f, 0.86f, 0.17f, 0.17f}, {"caixa", 0.23f, 0.76f, 0.085f, 0.13f}, {"chimbal", 0.88f, 0.45f, 0.085f, 0.055f},
-            {"tom1", 0.41f, 0.45f, 0.095f, 0.12f}, {"tom2", 0.64f, 0.47f, 0.095f, 0.12f}, {"surdo", 0.76f, 0.69f, 0.075f, 0.09f},
-            {"prato1", 0.21f, 0.15f, 0.115f, 0.06f}, {"prato2", 0.76f, 0.17f, 0.105f, 0.055f}};
         const auto b = imageBox();
-        const auto& s = spots[i];
-        const float rx = s.rx * b.getWidth(), ry = s.ry * b.getHeight() * 1.9f;
-        return {b.getX() + s.x * b.getWidth() - rx, b.getY() + s.y * b.getHeight() - ry, rx * 2, ry * 2};
+        const float sc = img.isValid() ? b.getWidth() / static_cast<float>(img.getWidth()) : 1.0f;
+        const auto& s = pix(i);
+        return {b.getX() + (s.cx - s.rx) * sc, b.getY() + (s.cy - s.ry) * sc, s.rx * 2.0f * sc, s.ry * 2.0f * sc};
+    }
+    juce::Point<float> labelPos(int i) const {
+        const auto b = imageBox();
+        const float sc = img.isValid() ? b.getWidth() / static_cast<float>(img.getWidth()) : 1.0f;
+        const auto& s = pix(i);
+        auto pt = juce::Point<float>(b.getX() + s.lx * sc, b.getY() + s.ly * sc);
+        return {pt.x, juce::jlimit(12.0f, static_cast<float>(getHeight()) - 30.0f, pt.y)};
     }
 
     nexus::Engine& engine;
