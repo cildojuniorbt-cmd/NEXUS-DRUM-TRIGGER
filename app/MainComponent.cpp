@@ -776,7 +776,7 @@ void MainComponent::paint(Graphics& g) {
         g.setGradientFill(ColourGradient(theme::panelTop, 0, r.getY(), theme::panelBot, 0, r.getBottom(), false));
         g.fillRoundedRectangle(r, 12.0f);
         g.setColour(theme::edge.brighter(0.15f)); g.drawRoundedRectangle(r.reduced(0.5f), 12.0f, 1.2f);
-        const String sub = currentPage == 0 ? theme::u8("Trigger · 2 canais") : (currentPage == 1 ? theme::u8("Bateria eletrônica · até 8 canais") : (currentPage == 2 ? theme::u8("Acústico + Eletrônico (EAD)") : (currentPage == 3 ? theme::u8("Mixer") : (currentPage == 4 ? theme::u8("Efeitos do mix principal") : (currentPage == 5 ? theme::u8("Configuração de MIDI") : theme::u8("Configurações"))))));
+        const String sub = currentPage == 0 ? theme::u8("Trigger · 2 canais") : (currentPage == 1 ? theme::u8("Bateria eletrônica · até 8 canais") : (currentPage == 2 ? theme::u8("Acústico + Eletrônico (EAD)") : (currentPage == 3 ? theme::u8("Mixer") : (currentPage == 4 ? theme::u8("Efeitos por peça e do mix") : (currentPage == 5 ? theme::u8("Configuração de MIDI") : theme::u8("Configurações"))))));
         g.setColour(theme::muted); g.setFont(theme::font(13.0f));
         g.drawText(sub, kitRect.withTrimmedTop(36).withHeight(22), Justification::centred);
     }

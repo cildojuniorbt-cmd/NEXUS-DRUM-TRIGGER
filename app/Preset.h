@@ -20,6 +20,8 @@ inline std::vector<ParamEntry> makeParamTable(nexus::EngineParams& p) {
         I(s + "sound", q.sound); I(s + "inCh", q.inputChannel); I(s + "out", q.outRoute); F(s + "level", q.level); F(s + "pitch", q.pitchSemis); F(s + "pan", q.pan);
         F(s + "inGain", q.inputGainDb); F(s + "thr", q.thresholdDb); F(s + "retrig", q.retriggerMs); F(s + "hold", q.holdMs);
         B(s + "mute", q.mute); B(s + "solo", q.solo);
+        F(s + "revSend", q.revSend); F(s + "dlySend", q.dlySend);
+        F(s + "eqLo", q.chEqLowDb); F(s + "eqMid", q.chEqMidDb); F(s + "eqHi", q.chEqHighDb);
         F(s + "hp", q.hpHz); F(s + "lp", q.lpHz); F(s + "dyn", q.dynamics); F(s + "sens", q.velocitySens);
     };
     for (int n = 0; n < nexus::kNumPads; ++n) addPad("pad" + juce::String(n + 1) + "_", p.pad[n]);
@@ -37,7 +39,7 @@ inline std::vector<ParamEntry> makeParamTable(nexus::EngineParams& p) {
     B("midiOut", p.midiOutOn); I("midiOutCh", p.midiOutChannel);
     F("bleed", p.bleedReject); F("master", p.master);
     F("revRoom", p.reverbRoom); F("revDamp", p.reverbDamp); F("revWet", p.reverbWet);
-    F("electronic", p.electronicLevel); F("acoustic", p.acousticLevel); F("width", p.stereoWidth);
+    F("electronic", p.electronicLevel); F("acoustic", p.acousticLevel); F("acRevSend", p.acRevSend); F("acDlySend", p.acDlySend); F("width", p.stereoWidth);
     F("eqLow", p.eqLowDb); F("eqMid", p.eqMidDb); F("eqHigh", p.eqHighDb);
     F("compThr", p.compThresholdDb); F("compRatio", p.compRatio); F("compAtt", p.compAttackMs);
     F("compRel", p.compReleaseMs); F("compMakeup", p.compMakeupDb); B("compOn", p.compOn);

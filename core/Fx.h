@@ -120,6 +120,18 @@ public:
         d = std::min(size - 2, std::max(1, static_cast<int>(timeMs * 0.001 * fs)));
         fb = std::min(0.92f, std::max(0.0f, feedbackIn)); mix = std::min(1.0f, std::max(0.0f, mixIn));
     }
+    // envio: entra só o que cada canal mandar; devolve o eco (molhado)
+    inline void processSend(float inL, float inR, float& wetL, float& wetR) {
+        wetL = wetR = 0.0f;
+        if (mix <= 0.0001f) return;
+        const int rp = (pos - d + size) % size;
+        const float dl = bufL[static_cast<size_t>(rp)], dr = bufR[static_cast<size_t>(rp)];
+        lpL += 0.45f * (dl - lpL); lpR += 0.45f * (dr - lpR);
+        bufL[static_cast<size_t>(pos)] = inL + lpR * fb;
+        bufR[static_cast<size_t>(pos)] = inR + lpL * fb;
+        pos = (pos + 1) % size;
+        wetL = dl * mix; wetR = dr * mix;
+    }
     inline void process(float& l, float& r) {
         if (mix <= 0.0001f) return;
         const int rp = (pos - d + size) % size;

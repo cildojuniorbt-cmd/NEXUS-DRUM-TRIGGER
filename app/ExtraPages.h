@@ -147,9 +147,47 @@ private:
 class EffectsPage : public PageBase {
 public:
     EffectsPage(nexus::Engine& e, std::function<void()> changed)
-        : reverb(theme::u8("Reverb (ambiência)")), eq(theme::u8("Equalizador principal"), true),
+        : chan(theme::u8("Efeitos por peça")), reverb(theme::u8("Reverb (ambiência)")), eq(theme::u8("Equalizador principal"), true),
           comp(theme::u8("Compressor principal"), true), echo(theme::u8("Eco (delay)")), eng(e) {
         auto& p = e.params;
+        // ---- canal selecionado: envios e EQ só daquela peça
+        static const char* padNames[] = {"Bumbo", "Caixa", "Chimbal", "Tom 1", "Tom 2", "Surdo", "Prato 1", "Prato 2"};
+        static const char* zoneNames[] = {"Bumbo", "Caixa", "Chimbal", "Tom 1", "Tom 2", "Prato"};
+        pick.addSectionHeading(theme::u8("Bateria eletrônica / Trigger"));
+        for (int i = 0; i < nexus::kNumPads; ++i) pick.addItem(theme::u8(padNames[i]), 1 + i);
+        pick.addSectionHeading("EAD");
+        for (int z = 0; z < nexus::kNumZones; ++z) pick.addItem(juce::String("EAD - ") + theme::u8(zoneNames[z]), 20 + z);
+        pick.addItem(theme::u8("EAD - Microfones (som acústico)"), 40);
+        pick.setSelectedId(2, juce::dontSendNotification); // caixa
+        pick.onChange = [this] { chan.refresh(); updateHint(); };
+        leftBox.addAndMakeVisible(pick);
+        chanHint.setFont(theme::font(13.0f)); chanHint.setJustificationType(juce::Justification::topLeft); chanHint.setColour(juce::Label::textColourId, theme::muted);
+        leftBox.addAndMakeVisible(chanHint);
+        leftBox.onResize = [this] { auto b = leftBox.getLocalBounds(); pick.setBounds(b.removeFromTop(34).withWidth(juce::jmin(300, b.getWidth()))); b.removeFromTop(6); chanHint.setBounds(b.withWidth(juce::jmin(300, b.getWidth()))); };
+        chan.setLeading(&leftBox);
+        auto sel = [this]() -> nexus::PadParams* {
+            const int id = pick.getSelectedId();
+            if (id >= 1 && id <= nexus::kNumPads) return &eng.params.pad[id - 1];
+            if (id >= 20 && id < 20 + nexus::kNumZones) return &eng.params.zone[id - 20];
+            return nullptr; // microfones
+        };
+        chan.add("Envio Reverb", 0, 2, 0.01, "", 1.0, 2,
+                 [this, sel] { auto* c = sel(); return c ? c->revSend.load() : eng.params.acRevSend.load(); },
+                 [this, sel](float v) { if (auto* c = sel()) c->revSend = v; else eng.params.acRevSend = v; }, changed);
+        chan.add("Envio Eco", 0, 2, 0.01, "", 1.0, 2,
+                 [this, sel] { auto* c = sel(); return c ? c->dlySend.load() : eng.params.acDlySend.load(); },
+                 [this, sel](float v) { if (auto* c = sel()) c->dlySend = v; else eng.params.acDlySend = v; }, changed);
+        chan.add("Grave", -12, 12, 0.5, " dB", 0.0, 1,
+                 [this, sel] { auto* c = sel(); return c ? c->chEqLowDb.load() : eng.params.eqLowDb.load(); },
+                 [this, sel](float v) { if (auto* c = sel()) c->chEqLowDb = v; else eng.params.eqLowDb = v; }, changed);
+        chan.add(theme::u8("Médio"), -12, 12, 0.5, " dB", 0.0, 1,
+                 [this, sel] { auto* c = sel(); return c ? c->chEqMidDb.load() : eng.params.eqMidDb.load(); },
+                 [this, sel](float v) { if (auto* c = sel()) c->chEqMidDb = v; else eng.params.eqMidDb = v; }, changed);
+        chan.add("Agudo", -12, 12, 0.5, " dB", 0.0, 1,
+                 [this, sel] { auto* c = sel(); return c ? c->chEqHighDb.load() : eng.params.eqHighDb.load(); },
+                 [this, sel](float v) { if (auto* c = sel()) c->chEqHighDb = v; else eng.params.eqHighDb = v; }, changed);
+
+        // ---- efeitos do mix principal (a quantidade que cada peça recebe vem do envio acima)
         reverb.add("Sala", 0, 1, 0.01, "", 0.5, 2, [&p] { return p.reverbRoom.load(); }, [&p](float v) { p.reverbRoom = v; }, changed);
         reverb.add("Abafamento", 0, 1, 0.01, "", 0.5, 2, [&p] { return p.reverbDamp.load(); }, [&p](float v) { p.reverbDamp = v; }, changed);
         reverb.add("Quantidade", 0, 1, 0.01, "", 0.0, 2, [&p] { return p.reverbWet.load(); }, [&p](float v) { p.reverbWet = v; }, changed);
@@ -170,27 +208,38 @@ public:
         echo.add(theme::u8("Repetições"), 0, 0.9, 0.01, "", 0.35, 2, [&p] { return p.delayFeedback.load(); }, [&p](float v) { p.delayFeedback = v; }, changed);
         echo.add("Mistura", 0, 1, 0.01, "", 0.0, 2, [&p] { return p.delayMix.load(); }, [&p](float v) { p.delayMix = v; }, changed);
 
-        for (auto* c : std::initializer_list<Component*>{&reverb, &eq, &comp, &echo}) addAndMakeVisible(c);
-        note.setText(theme::u8("Estes efeitos valem para tudo que sai no mix estéreo (L+R). As saídas separadas por peça saem sem efeitos, para você mixar depois."), juce::dontSendNotification);
+        for (auto* c : std::initializer_list<Component*>{&chan, &reverb, &eq, &comp, &echo}) addAndMakeVisible(c);
+        note.setText(theme::u8("Reverb e Eco: o botão “Quantidade/Mistura” é o total; o “Envio” de cada peça diz quanto dela vai para o efeito (0 = nada, 1 = normal, 2 = o dobro). As saídas separadas por peça saem sem efeitos."), juce::dontSendNotification);
         note.setFont(theme::font(13.0f)); note.setColour(juce::Label::textColourId, theme::muted);
         addAndMakeVisible(note);
+        updateHint();
         refresh();
     }
     void refresh() override {
-        reverb.refresh(); eq.refresh(); comp.refresh(); echo.refresh();
+        chan.refresh(); reverb.refresh(); eq.refresh(); comp.refresh(); echo.refresh();
         eq.power->setToggleState(eng.params.mEqOn.load(), juce::dontSendNotification);
         comp.power->setToggleState(eng.params.mCompOn.load(), juce::dontSendNotification);
     }
     void resized() override {
         auto r = getLocalBounds();
         note.setBounds(r.removeFromBottom(26));
-        auto top = r.removeFromTop((r.getHeight() - 10) / 2); r.removeFromTop(10);
-        eq.setBounds(top.removeFromLeft(top.getWidth() / 2 - 5)); top.removeFromLeft(10); comp.setBounds(top);
+        auto top = r.removeFromTop(r.getHeight() / 3); r.removeFromTop(10);
+        chan.setBounds(top);
+        auto mid = r.removeFromTop((r.getHeight() - 10) / 2); r.removeFromTop(10);
+        eq.setBounds(mid.removeFromLeft(mid.getWidth() / 2 - 5)); mid.removeFromLeft(10); comp.setBounds(mid);
         reverb.setBounds(r.removeFromLeft(r.getWidth() / 2 - 5)); r.removeFromLeft(10); echo.setBounds(r);
     }
 private:
-    KnobCard reverb, eq, comp, echo;
-    juce::Label note;
+    void updateHint() {
+        chanHint.setText(pick.getSelectedId() == 40
+            ? theme::u8("Microfones do EAD: aqui o EQ é o mesmo do cartão Equalizador da aba EAD.")
+            : theme::u8("Ex.: mais reverb só na caixa, eco só no tom. O EQ mexe só nesta peça."), juce::dontSendNotification);
+    }
+    struct Box : juce::Component { std::function<void()> onResize; void resized() override { if (onResize) onResize(); } };
+    KnobCard chan, reverb, eq, comp, echo;
+    Box leftBox;
+    juce::ComboBox pick;
+    juce::Label note, chanHint;
     nexus::Engine& eng;
 };
 

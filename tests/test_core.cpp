@@ -353,6 +353,20 @@ int main() {
         CHECK(got && he.idx == 2 && !he.zone && he.vel > 0.6f, "cada batida entra na fila da saída MIDI");
     }
 
+    { // efeitos por canal: envio de reverb e EQ de cada peça
+        auto tail = [](float send) {
+            Engine e; setup(e); e.params.reverbWet = 1.0f; e.params.reverbRoom = 1.0f; e.params.pad[0].revSend = send;
+            e.params.manualHit[0] = 900;
+            return run(e, silence(2, 96000), 72000).outPeak;
+        };
+        const float t0 = tail(0.0f), t2 = tail(2.0f);
+        CHECK(t2 > 4.0f * t0 + 1e-4f, "envio de reverb por peça: mais envio = mais cauda de reverb");
+        Engine a; setup(a); a.params.manualHit[1] = 900; Run ra = run(a, silence(2, 24000));
+        Engine b; setup(b); b.params.pad[1].chEqHighDb = -12.0f; b.params.pad[1].chEqMidDb = -12.0f; b.params.manualHit[1] = 900;
+        Run rb = run(b, silence(2, 24000));
+        CHECK(rb.finite && rb.outPeak < ra.outPeak * 0.9f, "EQ por peça muda só o som daquela peça");
+    }
+
     std::printf("\n%s (%d falha%s)\n", failures ? "TESTES FALHARAM" : "TODOS OS TESTES PASSARAM", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }

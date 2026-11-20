@@ -11,7 +11,8 @@
 namespace nexus {
 
 constexpr int kNumPads = 8;    // módulo virtual: até 8 pads, cada um ligado a uma entrada da interface
-constexpr int kNumZones = 6;   // EAD: bumbo, caixa, chimbal, tom 1, tom 2, prato (reconhecidos pelo espectro)
+constexpr int kNumZones = 6;
+constexpr int kChannels = 14;  // canais do mixer interno: 8 pads + 6 peças do EAD   // EAD: bumbo, caixa, chimbal, tom 1, tom 2, prato (reconhecidos pelo espectro)
 constexpr int kMaxInputs = 8;
 constexpr int kMaxOutputs = 8;
 
@@ -32,6 +33,10 @@ struct PadParams {
     std::atomic<float> hpHz{60.0f};
     std::atomic<float> lpHz{6000.0f};
     std::atomic<bool> mute{false}, solo{false};
+    // efeitos por canal (como numa mesa de som)
+    std::atomic<float> revSend{1.0f};        // envio para o reverb (0..2; 1 = normal)
+    std::atomic<float> dlySend{1.0f};        // envio para o eco (0..2; 1 = normal)
+    std::atomic<float> chEqLowDb{0.0f}, chEqMidDb{0.0f}, chEqHighDb{0.0f};
     std::atomic<float> dynamics{1.0f};       // curva de velocity
     std::atomic<float> velocitySens{1.0f};   // 0 = volume fixo, 1 = totalmente dinâmico
 
@@ -52,6 +57,7 @@ struct EngineParams {
     std::atomic<float> reverbRoom{0.5f}, reverbDamp{0.5f}, reverbWet{0.0f};
 
     // EAD: acústico + eletrônico
+    std::atomic<float> acRevSend{1.0f}, acDlySend{1.0f}; // envios dos microfones acústicos (EAD)
     std::atomic<float> acousticLevel{0.8f};   // nível do par estéreo de microfones (Mic 1 = E, Mic 2 = D)
     std::atomic<float> stereoWidth{1.0f};     // 0 = mono, 1 = estéreo natural, 1.5 = mais aberto
     std::atomic<float> electronicLevel{1.0f};
@@ -144,7 +150,7 @@ public:
         sdet.prepare(fs); aec[0].prepare(1024); aec[1].prepare(1024); prevOut = 0.0f;
         for (auto& h : zoneHold) h = 0;
         calSeen = -1; calN = 0;
-        eq.prepare(fs); comp.prepare(fs); reverb.prepare(fs); meq.prepare(fs); mcomp.prepare(fs); delay.prepare(fs);
+        eq.prepare(fs); for (auto& q : chEq) q.prepare(fs); for (auto& v : chEqSet) v[0] = v[1] = v[2] = 0.0f; comp.prepare(fs); reverb.prepare(fs); meq.prepare(fs); mcomp.prepare(fs); delay.prepare(fs);
         for (auto& v : voices) v = Voice{};
         voiceCounter = 0;
         outMeter = 0.0f;
@@ -191,6 +197,16 @@ public:
         meq.set(params.mEqLowDb.load(), params.mEqMidDb.load(), params.mEqHighDb.load());
         mcomp.set(params.mCompThresholdDb.load(), params.mCompRatio.load(), params.mCompAttackMs.load(), params.mCompReleaseMs.load(), params.mCompMakeupDb.load());
         delay.set(params.delayMs.load(), params.delayFeedback.load(), params.delayMix.load());
+        for (int c = 0; c < kChannels; ++c) {
+            const PadParams& cp = c < kNumPads ? params.pad[c] : params.zone[c - kNumPads];
+            const float lo = cp.chEqLowDb.load(), mi = cp.chEqMidDb.load(), hi = cp.chEqHighDb.load();
+            chEqOn[c] = (lo != 0.0f || mi != 0.0f || hi != 0.0f);
+            if (chEqOn[c] && (lo != chEqSet[c][0] || mi != chEqSet[c][1] || hi != chEqSet[c][2])) {
+                chEq[c].set(lo, mi, hi); chEqSet[c][0] = lo; chEqSet[c][1] = mi; chEqSet[c][2] = hi;
+            }
+            chRev[c] = cp.revSend.load(); chDly[c] = cp.dlySend.load();
+        }
+        const float acRev = params.acRevSend.load(), acDly = params.acDlySend.load();
         anySolo = false;
         for (int p = 0; p < kNumPads; ++p) if (params.pad[p].solo.load()) anySolo = true;
         anySoloZone = false;
@@ -247,10 +263,18 @@ public:
             }
 
             // 2) sons eletrônicos
-            float eL = 0.0f, eR = 0.0f;
+            float eL = 0.0f, eR = 0.0f, rvL = 0.0f, rvR = 0.0f, dyL = 0.0f, dyR = 0.0f;
             float bus[kMaxOutputs] = {};
-            renderVoices(eL, eR, bus);
-            eL *= elec; eR *= elec;
+            float cL[kChannels] = {}, cR[kChannels] = {};
+            renderVoices(cL, cR, bus);
+            for (int c = 0; c < kChannels; ++c) {
+                if (cL[c] == 0.0f && cR[c] == 0.0f && !chEqOn[c]) continue;
+                float l = cL[c] * elec, r = cR[c] * elec;
+                if (chEqOn[c]) chEq[c].process(l, r);
+                eL += l; eR += r;
+                rvL += l * chRev[c]; rvR += r * chRev[c];
+                dyL += l * chDly[c]; dyR += r * chDly[c];
+            }
 
             // 3) microfones acústicos (só na aba EAD): Mic 1 = esquerda, Mic 2 = direita
             float aL = 0.0f, aR = 0.0f;
@@ -264,14 +288,16 @@ public:
             }
 
             float L = aL + eL, R = aR + eR;
+            rvL += aL * acRev; rvR += aR * acRev;
+            dyL += aL * acDly; dyR += aR * acDly;
 
-            // 4) reverb (ambiência)
-            float wL, wR;
-            reverb.process(L, R, wL, wR);
-            L += wL; R += wR;
+            // 4) reverb e eco por envio (cada peça manda a quantidade dela)
+            float wL, wR, xL, xR;
+            reverb.process(rvL, rvR, wL, wR);
+            delay.processSend(dyL, dyR, xL, xR);
+            L += wL + xL; R += wR + xR;
             if (mEqOn) meq.process(L, R);
             if (mCompOn) mcomp.process(L, R);
-            delay.process(L, R);
             L = softLimit(L * master);
             R = softLimit(R * master);
             // saídas independentes (sem reverb): 1 -> L, 2 -> R, 3..8 -> canais extras
@@ -301,7 +327,7 @@ private:
         const std::vector<float>* data = nullptr;
         double pos = 0.0, inc = 1.0;
         float gainL = 0.0f, gainR = 0.0f;
-        int choke = 0, route = 0;
+        int choke = 0, route = 0, owner = 0;
         float fade = 1.0f, fadeStep = 0.0f; // fadeStep>0: em fade-out
         unsigned long long age = 0;
         bool active = false;
@@ -352,10 +378,11 @@ private:
         const float sens = pp.velocitySens.load();
         const float vel = 1.0f - sens + sens * velocity; // sens=0 -> sempre 1.0
         const float pitch = std::pow(2.0f, pp.pitchSemis.load() / 12.0f);
-        startVoice(pp.sound.load(), vel * pp.level.load(), pitch, pp.pan.load(), std::min(kMaxOutputs, std::max(0, pp.outRoute.load())));
+        startVoice(pp.sound.load(), vel * pp.level.load(), pitch, pp.pan.load(), std::min(kMaxOutputs, std::max(0, pp.outRoute.load())),
+                   isZone ? kNumPads + statusIdx : statusIdx);
     }
 
-    void startVoice(int soundIdx, float gain, float pitch, float pan, int route = 0) {
+    void startVoice(int soundIdx, float gain, float pitch, float pan, int route = 0, int owner = 0) {
         if (bank.size() == 0) return;
         const Sound& s = bank.get(soundIdx);
         if (s.chokeGroup > 0) // chimbal: novo golpe corta o anterior
@@ -367,12 +394,12 @@ private:
         const float ang = (p + 1.0f) * 0.25f * static_cast<float>(kPi);
         slot->data = &s.data; slot->pos = 0.0; slot->inc = pitch;
         slot->gainL = gain * std::cos(ang) * 1.414f; slot->gainR = gain * std::sin(ang) * 1.414f;
-        slot->route = route;
+        slot->route = route; slot->owner = std::min(kChannels - 1, std::max(0, owner));
         if (route > 0) { slot->gainL = slot->gainR = gain; }
         slot->choke = s.chokeGroup; slot->fade = 1.0f; slot->fadeStep = 0.0f; slot->age = ++voiceCounter; slot->active = true;
     }
 
-    inline void renderVoices(float& L, float& R, float* bus) {
+    inline void renderVoices(float* L, float* R, float* bus) {
         for (auto& v : voices) {
             if (!v.active) continue;
             const auto& d = *v.data;
@@ -381,7 +408,7 @@ private:
             const float fr = static_cast<float>(v.pos - static_cast<double>(i0));
             const float s = (d[i0] * (1.0f - fr) + d[i0 + 1] * fr) * v.fade;
             if (v.route > 0) bus[v.route - 1] += s * v.gainL;
-            else { L += s * v.gainL; R += s * v.gainR; }
+            else { L[v.owner] += s * v.gainL; R[v.owner] += s * v.gainR; }
             v.pos += v.inc;
             if (v.fadeStep > 0.0f) { v.fade -= v.fadeStep; if (v.fade <= 0.0f) v.active = false; }
         }
@@ -397,6 +424,10 @@ private:
     int calSeen = -1, calN = 0;
     float calSum[kBands] = {};
     Eq3 eq; Compressor comp; Reverb reverb;
+    Eq3 chEq[kChannels];
+    bool chEqOn[kChannels] = {};
+    float chEqSet[kChannels][3] = {};
+    float chRev[kChannels] = {}, chDly[kChannels] = {};
     Eq3 meq;
     Compressor mcomp;
     Delay delay;
