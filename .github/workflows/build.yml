@@ -17,16 +17,40 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Empacotar
         shell: pwsh
-        run: |
-          Compress-Archive -Path "build/NexusDrumTrigger_artefacts/Release/Nexus Drum Trigger.exe" -DestinationPath NexusDrumTrigger-Windows.zip
-      - name: Publicar Release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release delete latest -y --cleanup-tag || true
-          gh release create latest NexusDrumTrigger-Windows.zip --title "Nexus Drum Trigger (Windows)" --notes "Baixe o zip, extraia e abra o Nexus Drum Trigger.exe."
+        run: Compress-Archive -Path "build/NexusDrumTrigger_artefacts/Release/Nexus Drum Trigger.exe" -DestinationPath NexusDrumTrigger-Windows.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: NexusDrumTrigger-Windows
-          path: build/NexusDrumTrigger_artefacts/Release/
+          name: win
+          path: NexusDrumTrigger-Windows.zip
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar e compilar (Intel + Apple Silicon)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build --config Release --target test_core NexusDrumTrigger
+      - name: Rodar testes do nucleo de audio
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Empacotar
+        run: |
+          ditto -c -k --keepParent "build/NexusDrumTrigger_artefacts/Release/Nexus Drum Trigger.app" NexusDrumTrigger-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: NexusDrumTrigger-macOS.zip
+  release:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publicar Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release delete latest -y --cleanup-tag || true
+          gh release create latest dist/NexusDrumTrigger-Windows.zip dist/NexusDrumTrigger-macOS.zip --target ${{ github.sha }} --title "Nexus Drum Trigger" --notes "Windows: extraia o zip e abra o .exe. Mac: extraia o zip, clique com o botao direito no app e escolha Abrir."

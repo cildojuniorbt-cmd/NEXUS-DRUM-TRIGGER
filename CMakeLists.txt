@@ -21,7 +21,9 @@ if(NEXUS_BUILD_APP)
 
   juce_add_gui_app(NexusDrumTrigger
     PRODUCT_NAME "Nexus Drum Trigger"
-    COMPANY_NAME "Nexus Works Digital")
+    COMPANY_NAME "Nexus Works Digital"
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "O Nexus Drum Trigger usa o microfone para disparar os sons da bateria.")
 
   target_sources(NexusDrumTrigger PRIVATE
     app/Main.cpp
