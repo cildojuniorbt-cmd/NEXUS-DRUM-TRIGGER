@@ -16,13 +16,14 @@ inline std::vector<ParamEntry> makeParamTable(nexus::EngineParams& p) {
     auto F = [&](const juce::String& k, std::atomic<float>& a) { t.push_back({k, &a, nullptr, nullptr}); };
     auto I = [&](const juce::String& k, std::atomic<int>& a) { t.push_back({k, nullptr, &a, nullptr}); };
     auto B = [&](const juce::String& k, std::atomic<bool>& a) { t.push_back({k, nullptr, nullptr, &a}); };
-    for (int n = 0; n < nexus::kNumPads; ++n) {
-        const juce::String s = "pad" + juce::String(n + 1) + "_";
-        auto& q = p.pad[n];
-        I(s + "sound", q.sound); F(s + "level", q.level); F(s + "pitch", q.pitchSemis); F(s + "pan", q.pan);
+    auto addPad = [&](const juce::String& s, nexus::PadParams& q) {
+        I(s + "sound", q.sound); I(s + "inCh", q.inputChannel); F(s + "level", q.level); F(s + "pitch", q.pitchSemis); F(s + "pan", q.pan);
         F(s + "inGain", q.inputGainDb); F(s + "thr", q.thresholdDb); F(s + "retrig", q.retriggerMs);
         F(s + "hp", q.hpHz); F(s + "lp", q.lpHz); F(s + "dyn", q.dynamics); F(s + "sens", q.velocitySens);
-    }
+    };
+    for (int n = 0; n < nexus::kNumPads; ++n) addPad("pad" + juce::String(n + 1) + "_", p.pad[n]);
+    for (int n = 0; n < nexus::kNumZones; ++n) addPad("zone" + juce::String(n + 1) + "_", p.zone[n]);
+    I("activePads", p.activePads);
     F("bleed", p.bleedReject); F("master", p.master);
     F("revRoom", p.reverbRoom); F("revDamp", p.reverbDamp); F("revWet", p.reverbWet);
     F("electronic", p.electronicLevel); F("acoustic", p.acousticLevel); F("width", p.stereoWidth);

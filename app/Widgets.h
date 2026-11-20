@@ -1,6 +1,7 @@
 #pragma once
 #include "Theme.h"
 #include "core/Engine.h"
+#include <BinaryData.h>
 #include <cmath>
 #include <vector>
 
@@ -8,16 +9,26 @@
 //  Componentes de tela ligados ao motor de áudio
 // ============================================================================
 
-// ---------------------------------------------------------------- Kit visual
+// ---------------------------------------------------------------- Kit visual (foto + pontos clicáveis)
+inline nexus::PadParams& pp(nexus::Engine& e, bool zone, int i) { return zone ? e.params.zone[i] : e.params.pad[i]; }
+
 class DrumVisual : public juce::Component {
 public:
-    DrumVisual(nexus::Engine& e, bool hybridMode) : engine(e), hybrid(hybridMode) {}
+    struct Spot { const char* name; float x, y, rx, ry; };
+    static constexpr int kSpots = nexus::kNumPads;
+
+    DrumVisual(nexus::Engine& e, bool hybridMode) : engine(e), hybrid(hybridMode) {
+        img = juce::ImageCache::getFromMemory(BinaryData::kit_png, BinaryData::kit_pngSize);
+    }
     std::function<void(int)> onSelect;
     int selected = 0;
 
+    int numShown() const { return hybrid ? nexus::kNumZones : nexus::kNumPads; }
+    bool isActive(int i) const { return hybrid || i < engine.params.activePads.load(); }
+
     void tick() {
         bool dirty = false;
-        for (int p = 0; p < nexus::kNumPads; ++p) {
+        for (int p = 0; p < numShown(); ++p) {
             const unsigned h = engine.status.hitCount[p].load();
             if (h != lastHits[p]) { lastHits[p] = h; flash[p] = 1.0f; }
             if (flash[p] > 0.01f) { flash[p] *= 0.84f; dirty = true; }
@@ -26,147 +37,84 @@ public:
     }
 
     void mouseDown(const juce::MouseEvent& e) override {
-        if (hybrid || !onSelect) return;
-        const auto pt = e.position;
-        if (pt.getDistanceFrom(kickC()) < kickR() * 1.05f) onSelect(0);
-        else if (snareBox().expanded(6.0f).contains(pt)) onSelect(1);
+        if (!onSelect) return;
+        int best = -1; float bd = 1e9f;
+        for (int i = 0; i < numShown(); ++i) {
+            const auto c = spotRect(i);
+            const float dx = (e.position.x - c.getCentreX()) / (c.getWidth() * 0.5f), dy = (e.position.y - c.getCentreY()) / (c.getHeight() * 0.5f);
+            const float d = dx * dx + dy * dy;
+            if (d < 1.2f && d < bd) { bd = d; best = i; }
+        }
+        if (best >= 0) onSelect(best);
     }
 
     void paint(juce::Graphics& g) override {
         using namespace juce;
         const auto r = getLocalBounds().toFloat();
-        g.setGradientFill(ColourGradient(theme::panelTop, 0, 0, theme::bg, 0, r.getBottom(), false));
-        g.fillRoundedRectangle(r, 12.0f);
+        g.setColour(theme::panelBot); g.fillRoundedRectangle(r, 12.0f);
         Graphics::ScopedSaveState ss(g);
         Path clip; clip.addRoundedRectangle(r, 12.0f); g.reduceClipRegion(clip);
-        // luz de palco
-        g.setGradientFill(ColourGradient(theme::accent.withAlpha(0.30f), r.getCentreX(), -r.getHeight() * 0.05f, Colours::transparentBlack, r.getCentreX(), r.getHeight() * 0.8f, true));
+        if (img.isValid()) g.drawImage(img, imageBox(), RectanglePlacement::centred | RectanglePlacement::fillDestination);
+        // véu na cor de destaque (acompanha a cor escolhida na aba Aparência)
+        g.setGradientFill(ColourGradient(theme::accent.withAlpha(0.20f), r.getCentreX(), r.getY(), Colours::transparentBlack, r.getCentreX(), r.getBottom(), true));
         g.fillRect(r);
-        g.setGradientFill(ColourGradient(theme::accent.withAlpha(0.10f), r.getCentreX(), r.getBottom(), Colours::transparentBlack, r.getCentreX(), r.getBottom() - r.getHeight() * 0.35f, true));
-        g.fillRect(r);
+        g.setColour(theme::edge); g.drawRoundedRectangle(r.reduced(0.5f), 12.0f, 1.0f);
 
-        const float w = r.getWidth(), h = r.getHeight();
-        // pratos e estantes (decoração)
-        cymbal(g, {w * 0.30f, h * 0.20f}, w * 0.12f, h * 0.55f);
-        cymbal(g, {w * 0.79f, h * 0.26f}, w * 0.13f, h * 0.60f);
-        hat(g, {w * 0.09f, h * 0.40f}, w * 0.075f, h * 0.60f);
-        // tons (decoração)
-        deco(g, {w * 0.42f, h * 0.40f}, w * 0.075f);
-        deco(g, {w * 0.60f, h * 0.40f}, w * 0.075f);
-        deco(g, {w * 0.82f, h * 0.60f}, w * 0.095f);
-
-        // pad 2 (caixa)
-        const bool snareOn = !hybrid;
-        snare(g, snareOn ? selected == 1 : false, snareOn ? flash[1] : 0.0f, snareOn);
-        // pad 1 (bumbo)
-        kick(g, selected == 0, flash[0]);
-
-        // etiquetas dos microfones
+        for (int i = 0; i < numShown(); ++i) {
+            const auto c = spotRect(i);
+            const bool act = isActive(i), sel = selected == i;
+            if (flash[i] > 0.02f) {
+                for (int k = 3; k >= 1; --k) { g.setColour(theme::accent.withAlpha(flash[i] * 0.12f * static_cast<float>(4 - k))); g.fillEllipse(c.expanded(static_cast<float>(k) * 4.0f)); }
+                g.setColour(theme::accent.withAlpha(flash[i] * 0.55f)); g.fillEllipse(c);
+            }
+            if (sel) { g.setColour(theme::accent); g.drawEllipse(c, 2.6f); }
+            else if (act) { g.setColour(theme::accent.withAlpha(0.45f)); g.drawEllipse(c, 1.3f); }
+            else { g.setColour(Colours::white.withAlpha(0.18f)); g.drawEllipse(c, 1.0f); }
+            // etiqueta
+            g.setFont(theme::font(11.5f, true));
+            const String t = theme::u8(hybrid ? kZoneNames[i] : kNames[i]);
+            const float w = g.getCurrentFont().getStringWidthFloat(t) + 14.0f;
+            Rectangle<float> lb(c.getCentreX() - w * 0.5f, c.getCentreY() - 9.0f, w, 18.0f);
+            g.setColour(Colour(0xcc060807).withMultipliedAlpha(act ? 1.0f : 0.6f)); g.fillRoundedRectangle(lb, 9.0f);
+            g.setColour((sel ? theme::accent : theme::edge.brighter(0.3f)).withMultipliedAlpha(act ? 1.0f : 0.5f)); g.drawRoundedRectangle(lb, 9.0f, 1.0f);
+            g.setColour(act ? theme::text : theme::muted); g.drawText(t, lb, Justification::centred);
+        }
         if (hybrid) {
-            chip(g, theme::u8("MIC 1 (E)"), {w * 0.27f, h * 0.90f}, true);
-            chip(g, theme::u8("MIC 2 (D)"), {w * 0.73f, h * 0.90f}, true);
-            chip(g, theme::u8("GATILHO · soma dos 2 mics"), {w * 0.5f, h * 0.08f}, selected == 0);
-        } else {
-            chip(g, theme::u8("PAD 1 · MIC 1"), {kickC().x, kickC().y + kickR() + 20.0f}, selected == 0);
-            chip(g, theme::u8("PAD 2 · MIC 2"), {snareBox().getCentreX(), snareBox().getBottom() + 22.0f}, selected == 1);
+            g.setColour(theme::muted); g.setFont(theme::font(12.0f, true));
+            g.drawText(theme::u8("MIC 1 (E)"), 12, getHeight() - 24, 120, 18, Justification::centredLeft);
+            g.drawText(theme::u8("MIC 2 (D)"), getWidth() - 132, getHeight() - 24, 120, 18, Justification::centredRight);
         }
     }
+
+    static constexpr const char* kNames[8] = {"BUMBO", "CAIXA", "CHIMBAL", "TOM 1", "TOM 2", "SURDO", "PRATO 1", "PRATO 2"};
+    static constexpr const char* kZoneNames[3] = {"BUMBO · graves", "CAIXA · médios", "CHIMBAL · agudos"};
 
 private:
-    juce::Point<float> kickC() const { return {static_cast<float>(getWidth()) * 0.50f, static_cast<float>(getHeight()) * 0.60f}; }
-    float kickR() const { return juce::jmin(static_cast<float>(getHeight()) * 0.30f, static_cast<float>(getWidth()) * 0.17f); }
-    juce::Rectangle<float> snareBox() const {
-        const float rx = static_cast<float>(getWidth()) * 0.10f, ry = rx * 0.36f, depth = static_cast<float>(getHeight()) * 0.10f;
-        const juce::Point<float> c{static_cast<float>(getWidth()) * 0.22f, static_cast<float>(getHeight()) * 0.62f};
-        return {c.x - rx, c.y - ry, rx * 2, ry * 2 + depth};
+    juce::Rectangle<float> imageBox() const {
+        const auto r = getLocalBounds().toFloat();
+        if (!img.isValid()) return r;
+        const float ar = static_cast<float>(img.getWidth()) / static_cast<float>(img.getHeight());
+        float w = r.getWidth(), h = w / ar;
+        if (h > r.getHeight()) { h = r.getHeight(); w = h * ar; }
+        return Rectangle_(r.getCentreX() - w * 0.5f, r.getCentreY() - h * 0.5f, w, h);
     }
-
-    void glow(juce::Graphics& g, juce::Path p, float f, float th) {
-        for (int k = 4; k >= 1; --k) {
-            g.setColour(theme::accent.withAlpha(f * 0.10f * static_cast<float>(5 - k)));
-            g.strokePath(p, juce::PathStrokeType(th + static_cast<float>(k) * 5.0f));
-        }
-    }
-
-    void kick(juce::Graphics& g, bool sel, float f) {
-        using namespace juce;
-        const auto c = kickC(); const float R = kickR();
-        Path ring; ring.addEllipse(c.x - R, c.y - R, R * 2, R * 2);
-        if (f > 0.02f) glow(g, ring, f, 6.0f);
-        g.setColour(Colour(0xff0a0c0b)); g.fillPath(ring);
-        g.setColour(sel ? theme::accent : Colour(0xff4b5651));
-        g.strokePath(ring, PathStrokeType(7.0f));
-        const float hr = R - 10.0f;
-        g.setGradientFill(ColourGradient(Colour(0xff34403b), c.x, c.y - hr * 0.5f, Colour(0xff090c0b), c.x, c.y + hr, true));
-        g.fillEllipse(c.x - hr, c.y - hr, hr * 2, hr * 2);
-        if (f > 0.02f) { g.setColour(theme::accent.withAlpha(f * 0.45f)); g.fillEllipse(c.x - hr, c.y - hr, hr * 2, hr * 2); }
-        g.setColour(Colours::white.withAlpha(0.9f)); g.setFont(theme::font(R * 0.30f, true));
-        g.drawText("NEXUS", Rectangle<float>(c.x - hr, c.y - R * 0.18f, hr * 2, R * 0.36f), Justification::centred);
-        g.setColour(theme::accent); g.setFont(theme::font(R * 0.11f, true));
-        g.drawText("DRUM TRIGGER", Rectangle<float>(c.x - hr, c.y + R * 0.14f, hr * 2, R * 0.16f), Justification::centred);
-    }
-
-    void snare(juce::Graphics& g, bool sel, float f, bool active) {
-        using namespace juce;
-        const auto b = snareBox();
-        const float rx = b.getWidth() * 0.5f, ry = rx * 0.36f, depth = b.getHeight() - ry * 2;
-        const Point<float> c{b.getCentreX(), b.getY() + ry};
-        const float dim = active ? 1.0f : 0.45f;
-        // corpo
-        ColourGradient body(Colour(0xff0b0e0d).withMultipliedAlpha(dim), c.x - rx, 0, Colour(0xff0b0e0d).withMultipliedAlpha(dim), c.x + rx, 0, false);
-        body.addColour(0.5, Colour(0xff2d3632).withMultipliedAlpha(dim));
-        g.setGradientFill(body);
-        g.fillEllipse(c.x - rx, c.y + depth - ry, rx * 2, ry * 2);
-        g.fillRect(c.x - rx, c.y, rx * 2, depth);
-        Path top; top.addEllipse(c.x - rx, c.y - ry, rx * 2, ry * 2);
-        if (f > 0.02f) glow(g, top, f, 4.0f);
-        g.setGradientFill(ColourGradient(Colour(0xff3b4742).withMultipliedAlpha(dim), c.x, c.y - ry, Colour(0xff111513).withMultipliedAlpha(dim), c.x, c.y + ry, false));
-        g.fillPath(top);
-        if (f > 0.02f) { g.setColour(theme::accent.withAlpha(f * 0.4f)); g.fillPath(top); }
-        g.setColour(sel ? theme::accent : Colour(0xff6b7771).withMultipliedAlpha(dim));
-        g.strokePath(top, PathStrokeType(3.0f));
-        g.setColour(Colour(0xff6b7771).withMultipliedAlpha(dim)); // aro inferior
-        g.drawEllipse(c.x - rx, c.y + depth - ry, rx * 2, ry * 2, 1.5f);
-    }
-
-    void cymbal(juce::Graphics& g, juce::Point<float> c, float rx, float standY) {
-        using namespace juce;
-        g.setColour(Colour(0xff2a302d)); g.drawLine(c.x, c.y, c.x, standY, 2.0f);
-        const float ry = rx * 0.17f;
-        g.setGradientFill(ColourGradient(Colour(0xffc9a23a), c.x - rx, c.y, Colour(0xff4b3a10), c.x + rx, c.y, false));
-        g.fillEllipse(c.x - rx, c.y - ry, rx * 2, ry * 2);
-        g.setColour(Colour(0xffe6cc72).withAlpha(0.6f)); g.drawEllipse(c.x - rx, c.y - ry, rx * 2, ry * 2, 1.0f);
-        g.setColour(Colour(0xff1a1405)); g.fillEllipse(c.x - rx * 0.12f, c.y - ry * 0.4f, rx * 0.24f, ry * 0.8f);
-    }
-    void hat(juce::Graphics& g, juce::Point<float> c, float rx, float standY) {
-        cymbal(g, c, rx, standY);
-        using namespace juce;
-        const float ry = rx * 0.17f;
-        g.setColour(Colour(0xff8f7524)); g.fillEllipse(c.x - rx, c.y - ry + 5.0f, rx * 2, ry * 2);
-    }
-    void deco(juce::Graphics& g, juce::Point<float> c, float rx) {
-        using namespace juce;
-        const float ry = rx * 0.34f, depth = rx * 0.7f;
-        g.setColour(Colour(0xff0d1110)); g.fillEllipse(c.x - rx, c.y + depth - ry, rx * 2, ry * 2); g.fillRect(c.x - rx, c.y, rx * 2, depth);
-        g.setGradientFill(ColourGradient(Colour(0xff2a322e), c.x, c.y - ry, Colour(0xff0d1110), c.x, c.y + ry, false));
-        g.fillEllipse(c.x - rx, c.y - ry, rx * 2, ry * 2);
-        g.setColour(Colour(0xff4a5651)); g.drawEllipse(c.x - rx, c.y - ry, rx * 2, ry * 2, 2.0f);
-    }
-    void chip(juce::Graphics& g, const juce::String& t, juce::Point<float> c, bool on) {
-        using namespace juce;
-        g.setFont(theme::font(12.0f, true));
-        const float w = g.getCurrentFont().getStringWidthFloat(t) + 30.0f;
-        Rectangle<float> r(c.x - w * 0.5f, c.y - 12.0f, w, 24.0f);
-        g.setColour(Colour(0xcc060807)); g.fillRoundedRectangle(r, 12.0f);
-        g.setColour(on ? theme::accent : theme::edge.brighter(0.3f)); g.drawRoundedRectangle(r, 12.0f, 1.2f);
-        g.setColour(on ? theme::accent : theme::muted); g.fillEllipse(r.getX() + 9.0f, c.y - 3.5f, 7.0f, 7.0f);
-        g.setColour(theme::text); g.drawText(t, r.withTrimmedLeft(20.0f), Justification::centred);
+    static juce::Rectangle<float> Rectangle_(float x, float y, float w, float h) { return {x, y, w, h}; }
+    juce::Rectangle<float> spotRect(int i) const {
+        static const Spot spots[kSpots] = {
+            {"bumbo", 0.54f, 0.86f, 0.17f, 0.17f}, {"caixa", 0.23f, 0.76f, 0.085f, 0.13f}, {"chimbal", 0.88f, 0.45f, 0.085f, 0.055f},
+            {"tom1", 0.41f, 0.45f, 0.095f, 0.12f}, {"tom2", 0.64f, 0.47f, 0.095f, 0.12f}, {"surdo", 0.76f, 0.69f, 0.075f, 0.09f},
+            {"prato1", 0.21f, 0.15f, 0.115f, 0.06f}, {"prato2", 0.76f, 0.17f, 0.105f, 0.055f}};
+        const auto b = imageBox();
+        const auto& s = spots[i];
+        const float rx = s.rx * b.getWidth(), ry = s.ry * b.getHeight() * 1.9f;
+        return {b.getX() + s.x * b.getWidth() - rx, b.getY() + s.y * b.getHeight() - ry, rx * 2, ry * 2};
     }
 
     nexus::Engine& engine;
     bool hybrid;
-    unsigned lastHits[nexus::kNumPads] = {0, 0};
-    float flash[nexus::kNumPads] = {0.0f, 0.0f};
+    juce::Image img;
+    unsigned lastHits[nexus::kNumPads] = {};
+    float flash[nexus::kNumPads] = {};
 };
 
 // ---------------------------------------------------------------- Forma de onda do som
@@ -206,27 +154,50 @@ private:
 // ---------------------------------------------------------------- Detecção (trigger) do pad
 class DetectionCard : public Card {
 public:
+    bool zone = false;   // true = editar uma zona do EAD em vez de um pad
     DetectionCard(nexus::Engine& e, std::function<void()> changed)
         : Card("Detecção (Trigger)"), engine(e),
           sens("Sensibilidade (ganho do mic)", -12, 36, 0.5, " dB", 1),
           thr("Limiar", -60, -6, 0.5, " dB", 1),
           retrig("Retrigger", 20, 300, 1, " ms", 0),
-          hp("Filtro grave (HP)", 20, 600, 1, " Hz", 0, 150),
-          lp("Filtro agudo (LP)", 500, 16000, 10, " Hz", 0, 3000) {
+          hp("Filtro grave (HP)", 20, 8000, 1, " Hz", 0, 150),
+          lp("Filtro agudo (LP)", 100, 16000, 10, " Hz", 0, 3000) {
         for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) { addAndMakeVisible(*s); s->afterChange = changed; }
+        for (int i = 1; i <= nexus::kMaxInputs; ++i) inSel.addItem(theme::u8("Entrada ") + juce::String(i), i);
+        inSel.onChange = [this, changed] { if (!zone && inSel.getSelectedId() > 0) { pp(engine, zone, pad).inputChannel = inSel.getSelectedId() - 1; changed(); } };
+        addAndMakeVisible(inSel); addAndMakeVisible(inLbl);
+        inLbl.setText(theme::u8("Ouve a"), juce::dontSendNotification);
+        inLbl.setFont(theme::font(13.0f, true)); inLbl.setColour(juce::Label::textColourId, theme::muted);
         rebind();
     }
-    void setPad(int p) { pad = p; setTitle(theme::u8("Detecção (Trigger) · Pad ") + juce::String(p + 1)); refresh(); }
-    void refresh() { for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->refresh(); }
+    void setPad(int p) {
+        pad = p;
+        static const char* names[] = {"Bumbo", "Caixa", "Chimbal", "Tom 1", "Tom 2", "Surdo", "Prato 1", "Prato 2"};
+        static const char* zn[] = {"Bumbo (graves)", "Caixa (médios)", "Chimbal (agudos)"};
+        setTitle(theme::u8("Detecção · ") + theme::u8(zone ? zn[p] : names[p]));
+        refresh();
+    }
+    void refresh() {
+        for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->refresh();
+        inSel.setVisible(!zone); inLbl.setVisible(!zone);
+        if (!zone) inSel.setSelectedId(pp(engine, zone, pad).inputChannel.load() + 1, juce::dontSendNotification);
+        resized();
+    }
     void resized() override {
         Card::resized();
         auto r = content();
+        if (!zone) {
+            auto row = r.removeFromTop(32);
+            inLbl.setBounds(row.removeFromLeft(70));
+            inSel.setBounds(row.reduced(0, 2));
+            r.removeFromTop(4);
+        }
         const int h = juce::jlimit(34, 48, r.getHeight() / 5);
         for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->setBounds(r.removeFromTop(h));
     }
 private:
     void rebind() {
-        auto P = [this]() -> nexus::PadParams& { return engine.params.pad[pad]; };
+        auto P = [this]() -> nexus::PadParams& { return pp(engine, zone, pad); };
         sens.bind([=] { return P().inputGainDb.load(); }, [=](float v) { P().inputGainDb = v; });
         thr.bind([=] { return P().thresholdDb.load(); }, [=](float v) { P().thresholdDb = v; });
         retrig.bind([=] { return P().retriggerMs.load(); }, [=](float v) { P().retriggerMs = v; });
@@ -236,29 +207,32 @@ private:
     nexus::Engine& engine;
     int pad = 0;
     BarSlider sens, thr, retrig, hp, lp;
+    juce::ComboBox inSel;
+    juce::Label inLbl;
 };
 
 // ---------------------------------------------------------------- Som do pad (nome + onda + play)
 class SoundPanel : public Card {
 public:
+    bool zone = false;   // true = editar uma zona do EAD em vez de um pad
     SoundPanel(nexus::Engine& e, std::function<void()> changed) : Card("Som do pad"), engine(e), changed(std::move(changed)) {
         for (auto* b : {&prev, &next}) { addAndMakeVisible(*b); }
         prev.setButtonText(theme::u8("‹")); next.setButtonText(theme::u8("›"));
         prev.onClick = [this] { step(-1); };
         next.onClick = [this] { step(+1); };
         play.setButtonText(theme::u8("▶  Ouvir"));
-        play.onClick = [this] { engine.params.previewSound = engine.params.pad[pad].sound.load(); };
+        play.onClick = [this] { engine.params.previewSound = pp(engine, zone, pad).sound.load(); };
         addAndMakeVisible(play); addAndMakeVisible(wave);
         for (auto* l : {&name, &cat}) addAndMakeVisible(*l);
         name.setFont(theme::font(20.0f, true)); name.setJustificationType(juce::Justification::centred);
         cat.setFont(theme::font(13.0f)); cat.setColour(juce::Label::textColourId, theme::accent); cat.setJustificationType(juce::Justification::centred);
     }
-    void setPad(int p) { pad = p; setTitle(theme::u8("Som do pad · Pad ") + juce::String(p + 1)); refresh(); }
+    void setPad(int p) { pad = p; setTitle(theme::u8(zone ? "Som do gatilho" : "Som do pad")); refresh(); }
     void refresh() {
-        const auto& s = engine.sounds().get(engine.params.pad[pad].sound.load());
+        const auto& s = engine.sounds().get(pp(engine, zone, pad).sound.load());
         name.setText(theme::u8(s.name.c_str()), juce::dontSendNotification);
         cat.setText(theme::upper(theme::u8(s.category.c_str())), juce::dontSendNotification);
-        if (shownSound != engine.params.pad[pad].sound.load()) { shownSound = engine.params.pad[pad].sound.load(); wave.setData(s.data); }
+        if (shownSound != pp(engine, zone, pad).sound.load()) { shownSound = pp(engine, zone, pad).sound.load(); wave.setData(s.data); }
     }
     void resized() override {
         Card::resized();
@@ -277,8 +251,8 @@ public:
 private:
     void step(int d) {
         const int n = engine.sounds().size();
-        engine.params.pad[pad].sound = (engine.params.pad[pad].sound.load() + d + n) % n;
-        engine.params.previewSound = engine.params.pad[pad].sound.load();
+        pp(engine, zone, pad).sound = (pp(engine, zone, pad).sound.load() + d + n) % n;
+        engine.params.previewSound = pp(engine, zone, pad).sound.load();
         changed();
     }
     nexus::Engine& engine;
@@ -292,6 +266,7 @@ private:
 // ---------------------------------------------------------------- Ajuste do som (knobs)
 class TuneCard : public Card {
 public:
+    bool zone = false;   // true = editar uma zona do EAD em vez de um pad
     TuneCard(nexus::Engine& e, std::function<void()> changed)
         : Card(theme::u8("Ajuste do som")), engine(e),
           pitch(theme::u8("Afinação"), -12, 12, 0.1, " st", 0.0, 1),
@@ -299,7 +274,7 @@ public:
           pan("Pan", -1, 1, 0.01, "", 0.0, 2),
           sens(theme::u8("Dinâmica"), 0, 1, 0.01, "", 1.0, 2) {
         for (auto* k : {&pitch, &level, &pan, &sens}) { addAndMakeVisible(*k); k->afterChange = changed; }
-        auto P = [this]() -> nexus::PadParams& { return engine.params.pad[pad]; };
+        auto P = [this]() -> nexus::PadParams& { return pp(engine, zone, pad); };
         pitch.bind([=] { return P().pitchSemis.load(); }, [=](float v) { P().pitchSemis = v; });
         level.bind([=] { return P().level.load(); }, [=](float v) { P().level = v; });
         pan.bind([=] { return P().pan.load(); }, [=](float v) { P().pan = v; });
@@ -322,6 +297,7 @@ private:
 // ---------------------------------------------------------------- Biblioteca de sons
 class LibraryCard : public Card, private juce::ListBoxModel {
 public:
+    bool zone = false;   // true = editar uma zona do EAD em vez de um pad
     LibraryCard(nexus::Engine& e, std::function<void()> changed) : Card(theme::u8("Biblioteca de sons")), engine(e), changed(std::move(changed)) {
         const auto& bank = engine.sounds();
         std::vector<std::string> cats;
@@ -350,7 +326,7 @@ private:
             g.drawText(theme::upper(theme::u8(r.text.c_str())), 8, 8, w - 16, h - 8, Justification::centredLeft);
             return;
         }
-        const bool cur = engine.params.pad[pad].sound.load() == r.sound;
+        const bool cur = pp(engine, zone, pad).sound.load() == r.sound;
         auto rc = Rectangle<float>(2.0f, 2.0f, static_cast<float>(w) - 4.0f, static_cast<float>(h) - 4.0f);
         if (cur) {
             g.setColour(theme::accent.withAlpha(0.18f)); g.fillRoundedRectangle(rc, 7.0f);
@@ -364,7 +340,7 @@ private:
     }
     void listBoxItemClicked(int row, const juce::MouseEvent&) override {
         if (row < 0 || row >= static_cast<int>(rows.size()) || rows[static_cast<size_t>(row)].header) return;
-        engine.params.pad[pad].sound = rows[static_cast<size_t>(row)].sound;
+        pp(engine, zone, pad).sound = rows[static_cast<size_t>(row)].sound;
         engine.params.previewSound = rows[static_cast<size_t>(row)].sound;
         changed();
     }
@@ -375,59 +351,70 @@ private:
     juce::ListBox list;
 };
 
-// ---------------------------------------------------------------- Nível de entrada
+// ---------------------------------------------------------------- Nível de entrada (até 8 entradas)
 class InputCard : public Card {
 public:
-    InputCard(nexus::Engine& e, const juce::String& a, const juce::String& b) : Card(theme::u8("Nível de entrada")), engine(e) {
-        names[0] = a; names[1] = b;
-        for (int i = 0; i < 2; ++i) {
-            addAndMakeVisible(meter[i]);
-            lbl[i].setFont(theme::font(13.0f, true)); lbl[i].setJustificationType(juce::Justification::centred);
-            vel[i].setFont(theme::font(12.0f)); vel[i].setColour(juce::Label::textColourId, theme::muted); vel[i].setJustificationType(juce::Justification::centred);
-            lbl[i].setText(names[i], juce::dontSendNotification); vel[i].setText("Vel. -", juce::dontSendNotification);
-            addAndMakeVisible(lbl[i]); addAndMakeVisible(vel[i]);
+    explicit InputCard(nexus::Engine& e) : Card(theme::u8("Nível de entrada")), engine(e) {
+        for (int i = 0; i < nexus::kMaxInputs; ++i) {
+            addChildComponent(meter[i]);
+            lbl[i].setFont(theme::font(12.5f, true)); lbl[i].setJustificationType(juce::Justification::centred);
+            addChildComponent(lbl[i]);
         }
+        setCount(2);
+    }
+    void setCount(int n, bool hybridMode = false) {
+        n = juce::jlimit(1, nexus::kMaxInputs, n);
+        if (n == count && hybridMode == hybrid) return;
+        count = n; hybrid = hybridMode;
+        for (int i = 0; i < nexus::kMaxInputs; ++i) {
+            meter[i].setVisible(i < count); lbl[i].setVisible(i < count);
+            lbl[i].setText(hybrid ? (i == 0 ? theme::u8("E") : theme::u8("D")) : juce::String(i + 1), juce::dontSendNotification);
+        }
+        resized(); repaint();
     }
     void tick() {
-        for (int i = 0; i < 2; ++i) {
+        for (int i = 0; i < count; ++i) {
             meter[i].setLevel(engine.status.inputLevel[i].load());
-            const unsigned h = engine.status.hitCount[i].load();
-            if (h != lastHits[i]) {
-                lastHits[i] = h; flash[i] = 1.0f;
-                vel[i].setText("Vel. " + juce::String(juce::roundToInt(engine.status.lastVelocity[i].load() * 127.0f)), juce::dontSendNotification);
+            bool hit = false;
+            if (hybrid) {
+                for (int z = 0; z < nexus::kNumZones; ++z) { const unsigned h = engine.status.hitCount[z].load(); if (h != lastHits[z]) hit = true; }
+            } else {
+                for (int p = 0; p < engine.params.activePads.load(); ++p)
+                    if (engine.params.pad[p].inputChannel.load() == i && engine.status.hitCount[p].load() != lastHits[p]) hit = true;
             }
+            if (hit) flash[i] = 1.0f;
             if (flash[i] > 0.01f) { flash[i] *= 0.85f; repaint(ledBox[i].expanded(8)); }
         }
+        for (int p = 0; p < nexus::kNumPads; ++p) lastHits[p] = engine.status.hitCount[p].load();
     }
     void paint(juce::Graphics& g) override {
         Card::paint(g);
-        for (int i = 0; i < 2; ++i) {
+        for (int i = 0; i < count; ++i) {
             const auto c = ledBox[i].toFloat();
-            g.setColour(theme::accent.withAlpha(flash[i] * 0.35f)); g.fillEllipse(c.expanded(5.0f));
+            g.setColour(theme::accent.withAlpha(flash[i] * 0.35f)); g.fillEllipse(c.expanded(4.0f));
             g.setColour(juce::Colour(0xff2a342f).interpolatedWith(theme::hot, flash[i])); g.fillEllipse(c);
         }
     }
     void resized() override {
         Card::resized();
         auto r = content();
-        const int w = r.getWidth() / 2;
-        for (int i = 0; i < 2; ++i) {
-            auto col = r.removeFromLeft(w).reduced(12, 0);
-            auto top = col.removeFromTop(20);
-            ledBox[i] = juce::Rectangle<int>(top.getRight() - 14, top.getY() + 3, 12, 12);
-            lbl[i].setBounds(top.withTrimmedRight(16));
-            vel[i].setBounds(col.removeFromBottom(18));
-            meter[i].setBounds(col.reduced(juce::jmax(0, (col.getWidth() - 46) / 2), 2));
+        const int w = r.getWidth() / count;
+        for (int i = 0; i < count; ++i) {
+            auto col = r.removeFromLeft(w).reduced(count > 4 ? 2 : 10, 0);
+            ledBox[i] = juce::Rectangle<int>(col.getCentreX() - 5, col.getY() + 2, 10, 10);
+            col.removeFromTop(16);
+            lbl[i].setBounds(col.removeFromBottom(18));
+            meter[i].setBounds(col.reduced(juce::jmax(0, (col.getWidth() - 40) / 2), 2));
         }
     }
 private:
     nexus::Engine& engine;
-    juce::String names[2];
-    SegMeter meter[2];
-    juce::Label lbl[2], vel[2];
-    juce::Rectangle<int> ledBox[2];
-    unsigned lastHits[2] = {0, 0};
-    float flash[2] = {0.0f, 0.0f};
+    int count = 0; bool hybrid = false;
+    SegMeter meter[nexus::kMaxInputs];
+    juce::Label lbl[nexus::kMaxInputs];
+    juce::Rectangle<int> ledBox[nexus::kMaxInputs];
+    unsigned lastHits[nexus::kNumPads] = {};
+    float flash[nexus::kMaxInputs] = {};
 };
 
 // ---------------------------------------------------------------- Curva do EQ (resposta real dos filtros)

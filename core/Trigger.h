@@ -31,7 +31,7 @@ public:
     };
 
     void prepare(double sampleRate) { fs = sampleRate; applyFilters(); reset(); }
-    void reset() { hp.reset(); lp.reset(); scanning = false; scanLeft = 0; holdLeft = 0; peak = 0; recentPeak = 0; recentLeft = 0; }
+    void reset() { for (auto& f : hp) f.reset(); for (auto& f : lp) f.reset(); scanning = false; scanLeft = 0; holdLeft = 0; peak = 0; recentPeak = 0; recentLeft = 0; }
 
     void configure(const Settings& s) {
         const bool filtersChanged = (s.hpHz != cfg.hpHz) || (s.lpHz != cfg.lpHz);
@@ -50,7 +50,7 @@ public:
 
     // Processa 1 amostra. 'rejectBelow' > 0 descarta a batida se o pico ficar abaixo desse valor (anti-bleed).
     inline TriggerEvent process(float x, float rejectBelow = 0.0f) {
-        const float y = lp.process(hp.process(x * gain));
+        const float y = lp[1].process(lp[0].process(hp[1].process(hp[0].process(x * gain))));
         const float a = std::fabs(y);
         level = a;
 
@@ -83,11 +83,14 @@ public:
     }
 
 private:
-    void applyFilters() { hp.setHighpass(fs, cfg.hpHz); lp.setLowpass(fs, cfg.lpHz); }
+    void applyFilters() { // Butterworth de 4a ordem = 2 biquads em cascata
+        hp[0].setHighpass(fs, cfg.hpHz, 0.5412); hp[1].setHighpass(fs, cfg.hpHz, 1.3066);
+        lp[0].setLowpass(fs, cfg.lpHz, 0.5412); lp[1].setLowpass(fs, cfg.lpHz, 1.3066);
+    }
 
     double fs = 48000.0;
     Settings cfg;
-    Biquad hp, lp;
+    Biquad hp[2], lp[2];
     float gain = 1.0f, thr = 0.015f, level = 0.0f;
     int scanSamples = 120, holdSamples = 3360;
     bool scanning = false;

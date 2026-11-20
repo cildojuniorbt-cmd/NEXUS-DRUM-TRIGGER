@@ -34,7 +34,9 @@ private:
 
     NexusLnF lnf;
     nexus::Engine engine;
-    std::vector<float> in1, in2, outL, outR;
+    std::vector<std::vector<float>> inBuf;
+    const float* inPtr[nexus::kMaxInputs] = {};
+    std::vector<float> outL, outR;
 
     std::unique_ptr<PageBase> pages[4];
     int currentPage = 0, currentKit = -1;

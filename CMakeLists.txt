@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(NexusDrumTrigger VERSION 0.2.0 LANGUAGES C CXX)
+project(NexusDrumTrigger VERSION 0.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,6 +23,8 @@ if(NEXUS_BUILD_APP)
     PRODUCT_NAME "Nexus Drum Trigger"
     COMPANY_NAME "Nexus Works Digital")
 
+  juce_add_binary_data(NexusAssets SOURCES assets/kit.png)
+
   target_sources(NexusDrumTrigger PRIVATE
     app/Main.cpp
     app/MainComponent.cpp)
@@ -36,7 +38,8 @@ if(NEXUS_BUILD_APP)
   target_include_directories(NexusDrumTrigger PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
   target_link_libraries(NexusDrumTrigger
-    PRIVATE juce::juce_audio_utils
+    PRIVATE NexusAssets
+            juce::juce_audio_utils
     PUBLIC  juce::juce_recommended_config_flags
             juce::juce_recommended_warning_flags)
 endif()

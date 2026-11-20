@@ -35,6 +35,7 @@ public:
         add("Tom Grave", "Tom", 0, tom(fs, 100, 0.48));
         add("Prato Ataque", "Prato", 0, crash(fs));
         add("Sino (Cowbell)", "Percussão", 0, cowbell(fs));
+        add("Prato Condução (Ride)", "Prato", 0, ride(fs));
     }
 
     int size() const { return static_cast<int>(sounds.size()); }
@@ -159,6 +160,23 @@ private:
         for (size_t i = 0; i < n; ++i) {
             const double t = static_cast<double>(i) / fs;
             o[i] = static_cast<float>(hp.process(r.next()) * (0.6 * std::exp(-t / 0.9) + 0.4 * std::exp(-t / 0.08)));
+        }
+        return o;
+    }
+
+    static std::vector<float> ride(double fs) {
+        const size_t n = static_cast<size_t>(fs * 2.2);
+        std::vector<float> o(n);
+        Rng r; Biquad hp; hp.setHighpass(fs, 4500.0);
+        const double f[4] = {3150.0, 4720.0, 6310.0, 8870.0};
+        double ph[4] = {0, 0, 0, 0};
+        for (size_t i = 0; i < n; ++i) {
+            const double t = static_cast<double>(i) / fs;
+            double s = 0.0;
+            for (int k = 0; k < 4; ++k) { ph[k] += 2.0 * kPi * f[k] / fs; s += std::sin(ph[k]); }
+            const double ping = 0.5 * s * std::exp(-t / 0.55);
+            const double wash = hp.process(r.next()) * (0.35 * std::exp(-t / 0.9) + 0.2 * std::exp(-t / 0.05));
+            o[i] = static_cast<float>(ping + wash);
         }
         return o;
     }

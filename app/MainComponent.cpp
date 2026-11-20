@@ -8,6 +8,7 @@ using namespace juce;
 struct PageBase : public Component {
     virtual void refresh() = 0;
     virtual void tick() {}
+    virtual void setInputs(int) {}
 };
 
 namespace {
@@ -124,23 +125,29 @@ class MainComponent::TriggerPage : public PageBase {
 public:
     TriggerPage(nexus::Engine& e, std::function<void()> changed)
         : engine(e), visual(e, false), det(e, changed), sound(e, changed), tune(e, changed), lib(e, changed),
-          input(e, theme::u8("MIC 1"), theme::u8("MIC 2")), detector(theme::u8("Anti-vazamento")), reverb(theme::u8("Ambiência (Reverb)")), out(theme::u8("Saída")) {
+          input(e), detector(theme::u8("Anti-vazamento")), reverb(theme::u8("Ambiência (Reverb)")), out(theme::u8("Saída")) {
         auto& p = e.params;
         detector.add(theme::u8("Rejeição"), 0, 1, 0.01, "", 0.0, 2, [&p] { return p.bleedReject.load(); }, [&p](float v) { p.bleedReject = v; }, changed);
-        detector.info.setText("evita disparo cruzado", dontSendNotification);
         reverb.add("Sala", 0, 1, 0.01, "", 0.5, 2, [&p] { return p.reverbRoom.load(); }, [&p](float v) { p.reverbRoom = v; }, changed);
         reverb.add("Abafamento", 0, 1, 0.01, "", 0.5, 2, [&p] { return p.reverbDamp.load(); }, [&p](float v) { p.reverbDamp = v; }, changed);
         reverb.add("Quantidade", 0, 1, 0.01, "", 0.0, 2, [&p] { return p.reverbWet.load(); }, [&p](float v) { p.reverbWet = v; }, changed);
         out.add("Volume geral", 0, 1.2, 0.01, "", 0.9, 2, [&p] { return p.master.load(); }, [&p](float v) { p.master = v; }, changed);
 
-        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &detector, &reverb, &out}) addAndMakeVisible(c);
-        for (int i = 0; i < 2; ++i) {
+        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &detector, &reverb, &out, &padsLbl, &padsMinus, &padsPlus, &testBtn}) addAndMakeVisible(c);
+        for (int i = 0; i < nexus::kNumPads; ++i) {
             padBtn[i].setClickingTogglesState(true);
             padBtn[i].setRadioGroupId(101);
+            padBtn[i].setButtonText(theme::u8(DrumVisual::kNames[i]));
             padBtn[i].onClick = [this, i] { select(i); };
             addAndMakeVisible(padBtn[i]);
         }
-        visual.onSelect = [this](int i) { select(i); };
+        padsLbl.setFont(theme::font(12.5f, true)); padsLbl.setColour(Label::textColourId, theme::muted); padsLbl.setJustificationType(Justification::centred);
+        padsMinus.setButtonText("-"); padsPlus.setButtonText("+");
+        padsMinus.onClick = [this, changed] { engine.params.activePads = jmax(1, engine.params.activePads.load() - 1); changed(); };
+        padsPlus.onClick = [this, changed] { engine.params.activePads = jmin(nexus::kNumPads, engine.params.activePads.load() + 1); changed(); };
+        testBtn.setButtonText(theme::u8("▶ Testar"));
+        testBtn.onClick = [this] { engine.params.manualHit[selected] = 900; };
+        visual.onSelect = [this, changed](int i) { if (i >= engine.params.activePads.load()) { engine.params.activePads = i + 1; changed(); } select(i); };
         select(0);
     }
     void select(int i) {
@@ -151,28 +158,32 @@ public:
     void refresh() override {
         det.refresh(); sound.refresh(); tune.refresh(); lib.refresh();
         detector.refresh(); reverb.refresh(); out.refresh();
-        for (int i = 0; i < 2; ++i) {
-            const auto& s = engine.sounds().get(engine.params.pad[i].sound.load());
-            padBtn[i].setButtonText("PAD " + String(i + 1) + theme::u8("  ·  ") + theme::u8(s.name.c_str()));
+        const int act = engine.params.activePads.load();
+        for (int i = 0; i < nexus::kNumPads; ++i) {
             padBtn[i].setToggleState(selected == i, dontSendNotification);
+            padBtn[i].setAlpha(i < act ? 1.0f : 0.4f);
         }
+        padsLbl.setText(theme::u8("Pads: ") + String(act), dontSendNotification);
+        visual.repaint();
     }
+    void setInputs(int n) override { input.setCount(n, false); }
     void tick() override { visual.tick(); input.tick(); }
     void resized() override {
         auto r = getLocalBounds();
         auto right = r.removeFromRight(300); r.removeFromRight(10);
-        input.setBounds(right.removeFromTop(180)); right.removeFromTop(10);
-        detector.setBounds(right.removeFromTop(150)); right.removeFromTop(10);
+        input.setBounds(right.removeFromTop(150)); right.removeFromTop(10);
+        det.setBounds(right.removeFromTop(310)); right.removeFromTop(10);
         lib.setBounds(right);
         auto D = r.removeFromBottom(150); r.removeFromBottom(10);
         auto C = r.removeFromBottom(150); r.removeFromBottom(10);
         auto B = r.removeFromBottom(46); r.removeFromBottom(10);
-        auto A = r;
-        det.setBounds(A.removeFromRight(330)); A.removeFromRight(10);
-        visual.setBounds(A);
-        padBtn[0].setBounds(B.removeFromLeft(270)); B.removeFromLeft(10); padBtn[1].setBounds(B.removeFromLeft(270));
+        visual.setBounds(r);
+        testBtn.setBounds(B.removeFromRight(92)); B.removeFromRight(8);
+        padsPlus.setBounds(B.removeFromRight(36)); padsLbl.setBounds(B.removeFromRight(70)); padsMinus.setBounds(B.removeFromRight(36)); B.removeFromRight(10);
+        const int w = B.getWidth() / nexus::kNumPads;
+        for (int i = 0; i < nexus::kNumPads; ++i) padBtn[i].setBounds(B.removeFromLeft(w).reduced(2, 0));
         tune.setBounds(C.removeFromRight(340)); C.removeFromRight(10); sound.setBounds(C);
-        out.setBounds(D.removeFromRight(260)); D.removeFromRight(10); reverb.setBounds(D);
+        out.setBounds(D.removeFromRight(200)); D.removeFromRight(10); detector.setBounds(D.removeFromRight(200)); D.removeFromRight(10); reverb.setBounds(D);
     }
 private:
     nexus::Engine& engine;
@@ -180,7 +191,8 @@ private:
     DrumVisual visual;
     DetectionCard det; SoundPanel sound; TuneCard tune; LibraryCard lib; InputCard input;
     KnobCard detector, reverb, out;
-    TextButton padBtn[2];
+    TextButton padBtn[nexus::kNumPads], padsMinus, padsPlus, testBtn;
+    Label padsLbl;
 };
 
 // ============================================================================
@@ -190,7 +202,7 @@ class MainComponent::EadPage : public PageBase {
 public:
     EadPage(nexus::Engine& e, std::function<void()> changed)
         : engine(e), visual(e, true), det(e, changed), sound(e, changed), tune(e, changed), lib(e, changed),
-          input(e, theme::u8("MIC 1 · E"), theme::u8("MIC 2 · D")), eq(theme::u8("Equalizador")), comp("Compressor", true), reverb(theme::u8("Ambiência (Reverb)")), mix(theme::u8("Mistura")),
+          input(e), eq(theme::u8("Equalizador")), comp("Compressor", true), reverb(theme::u8("Ambiência (Reverb)")), mix(theme::u8("Mistura")),
           curve(e.params) {
         auto& p = e.params;
         auto eqChanged = [this, changed] { curve.repaint(); changed(); };
@@ -210,23 +222,40 @@ public:
         reverb.add("Abafamento", 0, 1, 0.01, "", 0.5, 2, [&p] { return p.reverbDamp.load(); }, [&p](float v) { p.reverbDamp = v; }, changed);
         reverb.add("Quantidade", 0, 1, 0.01, "", 0.0, 2, [&p] { return p.reverbWet.load(); }, [&p](float v) { p.reverbWet = v; }, changed);
 
+        mix.add(theme::u8("Separação"), 0, 1, 0.01, "", 0.0, 2, [&p] { return p.bleedReject.load(); }, [&p](float v) { p.bleedReject = v; }, changed);
         mix.add(theme::u8("Mics estéreo"), 0, 1.5, 0.01, "", 0.8, 2, [&p] { return p.acousticLevel.load(); }, [&p](float v) { p.acousticLevel = v; }, changed);
         mix.add("Largura", 0, 1.5, 0.01, "", 1.0, 2, [&p] { return p.stereoWidth.load(); }, [&p](float v) { p.stereoWidth = v; }, changed);
         mix.add(theme::u8("Eletrônico"), 0, 1.5, 0.01, "", 1.0, 2, [&p] { return p.electronicLevel.load(); }, [&p](float v) { p.electronicLevel = v; }, changed);
         mix.add("Volume geral", 0, 1.2, 0.01, "", 0.9, 2, [&p] { return p.master.load(); }, [&p](float v) { p.master = v; }, changed);
 
-        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &eq, &comp, &reverb, &mix}) addAndMakeVisible(c);
-        det.setPad(0); sound.setPad(0); tune.setPad(0); lib.setPad(0);
-        sound.setTitle(theme::u8("Som do gatilho"));
-        warn.setText(theme::u8("Os 2 microfones viram um par estéreo (Mic 1 = esquerda, Mic 2 = direita) e saem nas caixas: use fones ou mantenha a P.A. longe dos microfones."), dontSendNotification);
-        warn.setFont(theme::font(12.5f)); warn.setColour(Label::textColourId, theme::warn);
+        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &eq, &comp, &reverb, &mix, &testBtn}) addAndMakeVisible(c);
+        det.zone = sound.zone = tune.zone = lib.zone = true;
+        for (int i = 0; i < nexus::kNumZones; ++i) {
+            zoneBtn[i].setClickingTogglesState(true); zoneBtn[i].setRadioGroupId(202);
+            zoneBtn[i].setButtonText(theme::u8(i == 0 ? "BUMBO · graves" : i == 1 ? "CAIXA · médios" : "CHIMBAL · agudos"));
+            zoneBtn[i].onClick = [this, i] { select(i); };
+            addAndMakeVisible(zoneBtn[i]);
+        }
+        testBtn.setButtonText(theme::u8("▶ Testar"));
+        testBtn.onClick = [this] { engine.params.manualZone[selected] = 900; };
+        visual.onSelect = [this](int i) { select(i); };
+        warn.setText(theme::u8("2 mics = par estéreo; o app separa bumbo, caixa e chimbal por frequência."), dontSendNotification);
+        warn.setFont(theme::font(11.5f)); warn.setColour(Label::textColourId, theme::warn); warn.setMinimumHorizontalScale(1.0f);
         addAndMakeVisible(warn);
+        select(0);
     }
+    void select(int i) {
+        selected = i;
+        visual.selected = i; det.setPad(i); sound.setPad(i); tune.setPad(i); lib.setPad(i);
+        refresh();
+    }
+    void setInputs(int n) override { input.setCount(n, true); }
     void refresh() override {
         det.refresh(); sound.refresh(); tune.refresh(); lib.refresh();
         eq.refresh(); comp.refresh(); reverb.refresh(); mix.refresh(); curve.repaint();
         comp.power->setToggleState(engine.params.compOn.load(), dontSendNotification);
-        sound.setTitle(theme::u8("Som do gatilho"));
+        for (int i = 0; i < nexus::kNumZones; ++i) zoneBtn[i].setToggleState(selected == i, dontSendNotification);
+        visual.repaint();
     }
     void tick() override {
         visual.tick(); input.tick();
@@ -235,16 +264,17 @@ public:
     void resized() override {
         auto r = getLocalBounds();
         auto right = r.removeFromRight(300); r.removeFromRight(10);
-        input.setBounds(right.removeFromTop(180)); right.removeFromTop(10);
+        input.setBounds(right.removeFromTop(150)); right.removeFromTop(10);
+        det.setBounds(right.removeFromTop(310)); right.removeFromTop(10);
         lib.setBounds(right);
-        auto D = r.removeFromBottom(150); r.removeFromBottom(10);
-        auto C = r.removeFromBottom(160); r.removeFromBottom(10);
-        auto B = r.removeFromBottom(150); r.removeFromBottom(10);
-        auto A = r;
-        det.setBounds(A.removeFromRight(330)); A.removeFromRight(10);
-        auto w = A.removeFromBottom(34);
-        visual.setBounds(A);
-        warn.setBounds(w.reduced(4, 0));
+        auto D = r.removeFromBottom(140); r.removeFromBottom(8);
+        auto C = r.removeFromBottom(150); r.removeFromBottom(8);
+        auto B = r.removeFromBottom(140); r.removeFromBottom(8);
+        auto Z = r.removeFromBottom(44); r.removeFromBottom(8);
+        visual.setBounds(r);
+        testBtn.setBounds(Z.removeFromRight(92)); Z.removeFromRight(8);
+        for (int i = 0; i < nexus::kNumZones; ++i) zoneBtn[i].setBounds(Z.removeFromLeft(150).reduced(2, 0));
+        warn.setBounds(Z.reduced(8, 0));
         tune.setBounds(B.removeFromRight(340)); B.removeFromRight(10); sound.setBounds(B);
         eq.setBounds(C.removeFromLeft(C.getWidth() * 9 / 20)); C.removeFromLeft(10); comp.setBounds(C);
         reverb.setBounds(D.removeFromRight(330)); D.removeFromRight(10); mix.setBounds(D);
@@ -255,6 +285,8 @@ private:
     KnobCard eq, comp, reverb, mix;
     EqCurve curve;
     Label warn;
+    int selected = 0;
+    TextButton zoneBtn[nexus::kNumZones], testBtn;
 };
 
 // ============================================================================
@@ -262,12 +294,12 @@ private:
 // ============================================================================
 class MainComponent::AudioPage : public PageBase {
 public:
-    explicit AudioPage(AudioDeviceManager& dm) : card(theme::u8("Áudio · Dispositivos")), selector(dm, 0, 2, 0, 2, false, false, false, false) {
+    explicit AudioPage(AudioDeviceManager& dm) : card(theme::u8("Áudio · Dispositivos")), selector(dm, 0, 8, 0, 2, false, false, false, false) {
         addAndMakeVisible(card);
         card.addAndMakeVisible(selector);
-        help.setText(theme::u8("Como ligar: use uma interface de áudio com 2 entradas e escolha o driver dela acima (no Windows, ASIO ou WASAPI de baixa latência; no Mac, CoreAudio). "
-                               "Mic 1 = entrada 1, Mic 2 = entrada 2. Para tocar ao vivo, deixe o buffer em 64 a 128 amostras (2 a 5 ms). Se ouvir estalos, aumente o buffer. "
-                               "Com apenas 1 entrada (ex.: microfone USB), só o Pad 1 dispara."), dontSendNotification);
+        help.setText(theme::u8("Como ligar: use uma interface de áudio e escolha o driver dela acima (no Windows, ASIO ou WASAPI de baixa latência; no Mac, CoreAudio). Ative as entradas que for usar (até 8). "
+                               "No Trigger (módulo virtual), cada pad escolhe a entrada que ouve; com 2 entradas você usa 2 pads, com 8 usa a bateria inteira. No EAD, as entradas 1 e 2 são o par estéreo de microfones. "
+                               "Triggers/pads piezo (ex.: Roland) entram na entrada de instrumento (Hi-Z) com o phantom power DESLIGADO. Para tocar ao vivo, deixe o buffer em 64 a 128 amostras. Se ouvir estalos, aumente o buffer."), dontSendNotification);
         help.setFont(theme::font(13.5f)); help.setColour(Label::textColourId, theme::muted); help.setJustificationType(Justification::topLeft);
         card.addAndMakeVisible(help);
     }
@@ -275,7 +307,7 @@ public:
     void resized() override {
         card.setBounds(getLocalBounds());
         auto r = card.content();
-        help.setBounds(r.removeFromBottom(80));
+        help.setBounds(r.removeFromBottom(110));
         selector.setBounds(r);
     }
 private:
@@ -385,10 +417,6 @@ MainComponent::MainComponent() {
     LookAndFeel::setDefaultLookAndFeel(&lnf);
 
     engine.prepare(48000.0); // monta o banco de sons para a interface (refeito em prepareToPlay)
-    engine.params.pad[0].sound = 0;
-    engine.params.pad[1].sound = 3;
-    engine.params.pad[0].lpHz = 1500.0f; engine.params.pad[0].hpHz = 40.0f; engine.params.pad[0].thresholdDb = -30.0f;
-    engine.params.pad[1].hpHz = 120.0f;
     loadPreset(engine.params, dataDir().getChildFile("ultima-sessao.ndtkit"));
     engine.params.mode = static_cast<int>(nexus::Mode::Module);
 
@@ -420,9 +448,9 @@ MainComponent::MainComponent() {
     setSize(1280, 860);
 
     if (RuntimePermissions::isRequired(RuntimePermissions::recordAudio) && !RuntimePermissions::isGranted(RuntimePermissions::recordAudio))
-        RuntimePermissions::request(RuntimePermissions::recordAudio, [this](bool granted) { setAudioChannels(granted ? 2 : 0, 2); });
+        RuntimePermissions::request(RuntimePermissions::recordAudio, [this](bool granted) { setAudioChannels(granted ? 8 : 0, 2); });
     else
-        setAudioChannels(2, 2);
+        setAudioChannels(8, 2);
 
     startTimerHz(30);
 }
@@ -436,26 +464,29 @@ MainComponent::~MainComponent() {
 
 void MainComponent::prepareToPlay(int samplesPerBlockExpected, double sampleRate) {
     const size_t cap = static_cast<size_t>(jmax(256, samplesPerBlockExpected));
-    in1.assign(cap, 0.0f); in2.assign(cap, 0.0f); outL.assign(cap, 0.0f); outR.assign(cap, 0.0f);
+    inBuf.assign(nexus::kMaxInputs, std::vector<float>(cap, 0.0f)); outL.assign(cap, 0.0f); outR.assign(cap, 0.0f);
     engine.prepare(sampleRate);
 }
 
 void MainComponent::getNextAudioBlock(const AudioSourceChannelInfo& info) {
     auto* buf = info.buffer;
     auto* dev = deviceManager.getCurrentAudioDevice();
-    if (dev == nullptr || in1.empty()) { info.clearActiveBufferRegion(); return; }
+    if (dev == nullptr || inBuf.empty()) { info.clearActiveBufferRegion(); return; }
 
     const int nIn = dev->getActiveInputChannels().countNumberOfSetBits();
     const int nCh = buf->getNumChannels();
-    const int cap = static_cast<int>(in1.size());
+    const int cap = static_cast<int>(inBuf[0].size());
 
     for (int off = 0; off < info.numSamples; off += cap) {
         const int n = jmin(cap, info.numSamples - off);
         const int at = info.startSample + off;
-        if (nIn >= 1 && nCh >= 1) FloatVectorOperations::copy(in1.data(), buf->getReadPointer(0, at), n);
-        if (nIn >= 2 && nCh >= 2) FloatVectorOperations::copy(in2.data(), buf->getReadPointer(1, at), n);
+        const int use = jmin(nIn, nCh, static_cast<int>(nexus::kMaxInputs));
+        for (int c = 0; c < nexus::kMaxInputs; ++c) {
+            if (c < use) { FloatVectorOperations::copy(inBuf[static_cast<size_t>(c)].data(), buf->getReadPointer(c, at), n); inPtr[c] = inBuf[static_cast<size_t>(c)].data(); }
+            else inPtr[c] = nullptr;
+        }
 
-        engine.processBlock(nIn >= 1 ? in1.data() : nullptr, nIn >= 2 ? in2.data() : nullptr, outL.data(), outR.data(), n);
+        engine.processBlock(inPtr, use, outL.data(), outR.data(), n);
 
         for (int ch = 0; ch < nCh; ++ch) {
             if (ch == 0) FloatVectorOperations::copy(buf->getWritePointer(0, at), outL.data(), n);
@@ -486,6 +517,8 @@ void MainComponent::applyKit(int index) {
     currentKit = index;
     engine.params.pad[0].sound = kKits[index].s0;
     engine.params.pad[1].sound = kKits[index].s1;
+    engine.params.zone[0].sound = kKits[index].s0;
+    engine.params.zone[1].sound = kKits[index].s1;
     kitBtn.setButtonText(theme::u8(kKits[index].name));
     engine.params.previewSound = kKits[index].s0;
     refreshAll();
@@ -526,7 +559,12 @@ void MainComponent::timerCallback() {
         latencyMs = sr > 0 ? (d->getCurrentBufferSizeSamples() + d->getInputLatencyInSamples() + d->getOutputLatencyInSamples()) * 1000.0 / sr : 0.0;
         const int ins = d->getActiveInputChannels().countNumberOfSetBits();
         s = String(ins) + (ins == 1 ? " entrada" : " entradas");
-        if (ins < 2) s += theme::u8(" · precisa de 2 para os 2 pads");
+        if (engine.params.mode.load() == static_cast<int>(nexus::Mode::Module)) {
+            const int act = engine.params.activePads.load();
+            s += theme::u8(" · ") + String(act) + (act == 1 ? " pad ativo" : " pads ativos");
+            if (ins < 1) s += theme::u8(" · ative entradas em Áudio");
+        } else if (ins < 2) s += theme::u8(" · EAD usa 2 entradas");
+        pages[currentPage]->setInputs(jmax(1, ins));
     } else {
         latencyMs = 0.0; s = theme::u8("sem dispositivo · veja Áudio");
     }
