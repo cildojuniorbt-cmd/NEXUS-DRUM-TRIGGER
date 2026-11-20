@@ -24,6 +24,9 @@ inline std::vector<ParamEntry> makeParamTable(nexus::EngineParams& p) {
     for (int n = 0; n < nexus::kNumPads; ++n) addPad("pad" + juce::String(n + 1) + "_", p.pad[n]);
     for (int n = 0; n < nexus::kNumZones; ++n) addPad("zone" + juce::String(n + 1) + "_", p.zone[n]);
     I("activePads", p.activePads);
+    for (int z = 0; z < nexus::kNumZones; ++z)
+        for (int b = 0; b < nexus::kBands; ++b) F("prof" + juce::String(z) + "_" + juce::String(b), p.profile[z][b]);
+    F("blend", p.blend); B("antiFeedback", p.antiFeedback);
     F("bleed", p.bleedReject); F("master", p.master);
     F("revRoom", p.reverbRoom); F("revDamp", p.reverbDamp); F("revWet", p.reverbWet);
     F("electronic", p.electronicLevel); F("acoustic", p.acousticLevel); F("width", p.stereoWidth);

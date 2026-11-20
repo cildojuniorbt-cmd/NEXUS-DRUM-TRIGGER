@@ -57,8 +57,13 @@ private:
     Component* lead = nullptr;
 };
 
-struct FactoryKit { const char* name; int s0, s1; };
-const FactoryKit kKits[] = {{"Rock Moderno", 2, 4}, {"Eletrônico 808", 0, 3}, {"Seco / Funk", 1, 5}, {"Percussão", 12, 7}, {"Chimbal Pop", 1, 8}};
+struct FactoryKit { const char* name; int kick, snare, hat, tom1, tom2, crash, ride; float eqLow, eqMid, eqHigh, revWet, revRoom, blend; };
+const FactoryKit kKits[] = {
+    {"Rock Moderno",       2, 4, 8, 10, 12, 13, 15, 2.0f,  0.0f, 1.5f, 0.18f, 0.50f, 0.60f},
+    {"Pop Brilhante",      1, 3, 8, 10, 11, 13, 15, 0.0f,  1.0f, 3.0f, 0.22f, 0.45f, 0.50f},
+    {"Funk Seco",          1, 5, 8, 11, 12, 13, 15, 1.0f, -1.0f, 1.0f, 0.08f, 0.30f, 0.70f},
+    {"Eletr\xc3\xb4nico 808", 0, 3, 8, 10, 12, 13, 15, 3.0f, -2.0f, 2.0f, 0.15f, 0.40f, 0.90f},
+    {"Sala Grande",        2, 4, 9, 10, 12, 13, 15, 1.0f,  0.0f, 2.0f, 0.38f, 0.80f, 0.45f}};
 constexpr int kNumKits = 5;
 
 } // namespace
@@ -235,25 +240,37 @@ public:
         reverb.add("Quantidade", 0, 1, 0.01, "", 0.0, 2, [&p] { return p.reverbWet.load(); }, [&p](float v) { p.reverbWet = v; }, changed);
 
         mix.add(theme::u8("Separação"), 0, 1, 0.01, "", 0.0, 2, [&p] { return p.bleedReject.load(); }, [&p](float v) { p.bleedReject = v; }, changed);
+        mix.add(theme::u8("Acústico↔Kit"), 0, 1, 0.01, "", 0.5, 2, [&p] { return p.blend.load(); }, [&p](float v) { p.blend = v; }, changed);
         mix.add(theme::u8("Mics estéreo"), 0, 1.5, 0.01, "", 0.8, 2, [&p] { return p.acousticLevel.load(); }, [&p](float v) { p.acousticLevel = v; }, changed);
         mix.add("Largura", 0, 1.5, 0.01, "", 1.0, 2, [&p] { return p.stereoWidth.load(); }, [&p](float v) { p.stereoWidth = v; }, changed);
         mix.add(theme::u8("Eletrônico"), 0, 1.5, 0.01, "", 1.0, 2, [&p] { return p.electronicLevel.load(); }, [&p](float v) { p.electronicLevel = v; }, changed);
         mix.add("Volume geral", 0, 1.2, 0.01, "", 0.9, 2, [&p] { return p.master.load(); }, [&p](float v) { p.master = v; }, changed);
 
-        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &eq, &comp, &reverb, &mix, &testBtn}) addAndMakeVisible(c);
+        for (auto* c : std::initializer_list<Component*>{&visual, &det, &sound, &tune, &lib, &input, &eq, &comp, &reverb, &mix, &testBtn, &calibBtn, &clearBtn, &afBtn}) addAndMakeVisible(c);
         det.zone = sound.zone = tune.zone = lib.zone = true;
         for (int i = 0; i < nexus::kNumZones; ++i) {
             zoneBtn[i].setClickingTogglesState(true); zoneBtn[i].setRadioGroupId(202);
-            zoneBtn[i].setButtonText(theme::u8(i == 0 ? "BUMBO · graves" : i == 1 ? "CAIXA · médios" : "CHIMBAL · agudos"));
+            zoneBtn[i].setButtonText(theme::u8(DrumVisual::kZoneNames[i]));
             zoneBtn[i].onClick = [this, i] { select(i); };
             addAndMakeVisible(zoneBtn[i]);
         }
         testBtn.setButtonText(theme::u8("▶ Testar"));
         testBtn.onClick = [this] { engine.params.manualZone[selected] = 900; };
         visual.onSelect = [this](int i) { select(i); };
-        warn.setText(theme::u8("2 mics = par estéreo; o app separa bumbo, caixa e chimbal por frequência."), dontSendNotification);
-        warn.setFont(theme::font(11.5f)); warn.setColour(Label::textColourId, theme::warn); warn.setMinimumHorizontalScale(1.0f);
-        addAndMakeVisible(warn);
+        calibBtn.setButtonText("Calibrar");
+        calibBtn.onClick = [this, changed] {
+            if (engine.params.calibZone.load() >= 0) engine.params.calibZone = -1;
+            else { engine.status.calibDone = -1; engine.params.calibZone = selected; }
+            changed();
+        };
+        clearBtn.setButtonText(theme::u8("Padrão"));
+        clearBtn.onClick = [this, changed] {
+            for (int b = 0; b < nexus::kBands; ++b) engine.params.profile[selected][b] = 0.0f;
+            changed();
+        };
+        afBtn.setButtonText("Anti-retorno");
+        afBtn.setClickingTogglesState(true);
+        afBtn.onClick = [this, changed] { engine.params.antiFeedback = afBtn.getToggleState(); changed(); };
         select(0);
     }
     void select(int i) {
@@ -267,10 +284,15 @@ public:
         eq.refresh(); comp.refresh(); reverb.refresh(); mix.refresh(); curve.repaint();
         comp.power->setToggleState(engine.params.compOn.load(), dontSendNotification);
         for (int i = 0; i < nexus::kNumZones; ++i) zoneBtn[i].setToggleState(selected == i, dontSendNotification);
+        afBtn.setToggleState(engine.params.antiFeedback.load(), dontSendNotification);
         visual.repaint();
     }
     void tick() override {
         visual.tick(); input.tick();
+        const int cz = engine.params.calibZone.load();
+        if (cz >= 0) calibBtn.setButtonText(String("Toque ") + String(engine.status.calibCount.load()) + "/8");
+        else if (engine.status.calibDone.load() == selected) calibBtn.setButtonText(theme::u8("\xe2\x9c\x93 Calibrado"));
+        else calibBtn.setButtonText("Calibrar");
         comp.info.setText(theme::u8("Redução ") + String(engine.status.gainReductionDb.load(), 1) + " dB", dontSendNotification);
     }
     void resized() override {
@@ -284,21 +306,22 @@ public:
         auto B = r.removeFromBottom(140); r.removeFromBottom(8);
         auto Z = r.removeFromBottom(44); r.removeFromBottom(8);
         visual.setBounds(r);
-        testBtn.setBounds(Z.removeFromRight(92)); Z.removeFromRight(8);
-        for (int i = 0; i < nexus::kNumZones; ++i) zoneBtn[i].setBounds(Z.removeFromLeft(150).reduced(2, 0));
-        warn.setBounds(Z.reduced(8, 0));
+        testBtn.setBounds(Z.removeFromRight(84)); Z.removeFromRight(4);
+        clearBtn.setBounds(Z.removeFromRight(72).reduced(1, 0));
+        calibBtn.setBounds(Z.removeFromRight(112).reduced(1, 0)); Z.removeFromRight(6);
+        { const int w = Z.getWidth() / nexus::kNumZones; for (int i = 0; i < nexus::kNumZones; ++i) zoneBtn[i].setBounds(Z.removeFromLeft(w).reduced(2, 0)); }
         tune.setBounds(B.removeFromRight(340)); B.removeFromRight(10); sound.setBounds(B);
         eq.setBounds(C.removeFromLeft(C.getWidth() * 9 / 20)); C.removeFromLeft(10); comp.setBounds(C);
-        reverb.setBounds(D.removeFromRight(330)); D.removeFromRight(10); mix.setBounds(D);
+        reverb.setBounds(D.removeFromRight(300)); D.removeFromRight(10); mix.setBounds(D);
+        afBtn.setBounds(mix.getRight() - 118, mix.getY() + 9, 108, 28);
     }
 private:
     nexus::Engine& engine;
     DrumVisual visual; DetectionCard det; SoundPanel sound; TuneCard tune; LibraryCard lib; InputCard input;
     KnobCard eq, comp, reverb, mix;
     EqCurve curve;
-    Label warn;
     int selected = 0;
-    TextButton zoneBtn[nexus::kNumZones], testBtn;
+    TextButton zoneBtn[nexus::kNumZones], testBtn, calibBtn, clearBtn, afBtn;
 };
 
 // ============================================================================
@@ -594,12 +617,16 @@ void MainComponent::refreshAll() {
 
 void MainComponent::applyKit(int index) {
     currentKit = index;
-    engine.params.pad[0].sound = kKits[index].s0;
-    engine.params.pad[1].sound = kKits[index].s1;
-    engine.params.zone[0].sound = kKits[index].s0;
-    engine.params.zone[1].sound = kKits[index].s1;
-    kitBtn.setButtonText(theme::u8(kKits[index].name));
-    engine.params.previewSound = kKits[index].s0;
+    const auto& k = kKits[index];
+    auto& p = engine.params;
+    const int snd[8] = {k.kick, k.snare, k.hat, k.tom1, k.tom2, k.tom2, k.crash, k.ride};
+    for (int i = 0; i < nexus::kNumPads; ++i) p.pad[i].sound = snd[i];
+    const int zs[6] = {k.kick, k.snare, k.hat, k.tom1, k.tom2, k.crash};
+    for (int z = 0; z < nexus::kNumZones; ++z) p.zone[z].sound = zs[z];
+    p.eqLowDb = k.eqLow; p.eqMidDb = k.eqMid; p.eqHighDb = k.eqHigh;
+    p.reverbWet = k.revWet; p.reverbRoom = k.revRoom; p.blend = k.blend;
+    kitBtn.setButtonText(theme::u8(k.name));
+    p.previewSound = k.kick;
     refreshAll();
 }
 
@@ -698,7 +725,7 @@ void MainComponent::paint(Graphics& g) {
         g.setGradientFill(ColourGradient(theme::panelTop, 0, r.getY(), theme::panelBot, 0, r.getBottom(), false));
         g.fillRoundedRectangle(r, 12.0f);
         g.setColour(theme::edge.brighter(0.15f)); g.drawRoundedRectangle(r.reduced(0.5f), 12.0f, 1.2f);
-        const String sub = currentPage == 0 ? theme::u8("Módulo eletrônico") : (currentPage == 1 ? theme::u8("Acústico + Eletrônico") : theme::u8("Configurações"));
+        const String sub = currentPage == 0 ? theme::u8("Trigger · 2 canais") : (currentPage == 1 ? theme::u8("Bateria eletrônica · até 8 canais") : (currentPage == 2 ? theme::u8("Acústico + Eletrônico (EAD)") : theme::u8("Configurações")));
         g.setColour(theme::muted); g.setFont(theme::font(13.0f));
         g.drawText(sub, kitRect.withTrimmedTop(36).withHeight(22), Justification::centred);
     }

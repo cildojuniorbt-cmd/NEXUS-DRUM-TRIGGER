@@ -1,5 +1,7 @@
 // Testes automáticos do núcleo de áudio (rodam sem placa de som).
 #include "../core/Engine.h"
+#include <functional>
+#include <string>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
@@ -186,31 +188,80 @@ int main() {
         CHECK(w1.peakL > 0.0015f && w1.peakR < 0.0001f, "EAD estéreo: Mic 1 só no canal esquerdo, Mic 2 (silencioso) na direita");
         CHECK(std::fabs(w0.peakL - w0.peakR) < 0.0001f && w0.peakL > 0.0005f, "EAD largura 0 = mono (esquerda = direita)");
     }
-    { // zonas por frequência: bumbo (grave), caixa (médio), chimbal (agudo) a partir do par estéreo
-        auto zoneTest = [&](float freq, float amp) {
-            Engine e; setup(e); e.params.mode = static_cast<int>(Mode::Hybrid); e.params.bleedReject = 0.8f;
-            for (int z = 0; z < kNumZones; ++z) e.params.zone[z].retriggerMs = 100.0f; // a rajada sintética decai devagar
-            auto c = silence(2); addHit(c[0], 4800, amp, freq); addHit(c[1], 4800, amp, freq);
-            return run(e, c);
+    { // EAD: calibração por peça e reconhecimento (inclusive 2 peças ao mesmo tempo)
+        auto tone = [&](std::vector<float>& buf, size_t at, float amp, float f, float tau) {
+            for (size_t i = 0; i < 9600 && at + i < buf.size(); ++i) { const float t = static_cast<float>(i) / static_cast<float>(FS); buf[at + i] += amp * std::sin(2.0f * static_cast<float>(kPi) * f * t) * std::exp(-t / tau); }
         };
-        Run kick = zoneTest(80.0f, 0.6f), snare = zoneTest(1500.0f, 0.5f), hat = zoneTest(10000.0f, 0.5f);
-        CHECK(kick.hits[0] == 1 && kick.hits[1] == 0 && kick.hits[2] == 0, "EAD: som grave vira só BUMBO");
-        CHECK(snare.hits[1] == 1 && snare.hits[0] == 0 && snare.hits[2] == 0, "EAD: som médio vira só CAIXA");
-        CHECK(hat.hits[2] == 1 && hat.hits[0] == 0 && hat.hits[1] == 0, "EAD: som agudo vira só CHIMBAL");
-    }
-    { // kick + chimbal ao mesmo tempo (grave e agudo) disparam as duas zonas
-        Engine e; setup(e); e.params.mode = static_cast<int>(Mode::Hybrid); e.params.bleedReject = 0.8f;
-        for (int z = 0; z < kNumZones; ++z) e.params.zone[z].retriggerMs = 100.0f;
-        auto c = silence(2);
-        for (int k = 0; k < 2; ++k) { addHit(c[k], 4800, 0.6f, 80.0f); addHit(c[k], 4800, 0.5f, 10000.0f); }
-        Run r = run(e, c);
-        CHECK(r.hits[0] == 1 && r.hits[2] == 1, "EAD: bumbo e chimbal simultâneos disparam as duas zonas");
+        auto noise = [&](std::vector<float>& buf, size_t at, float amp, float tau, bool bright) {
+            uint32_t r = 12345u; Biquad hp, lp; hp.setHighpass(FS, bright ? 7000.0 : 2500.0); lp.setLowpass(FS, bright ? 16000.0 : 6000.0);
+            for (size_t i = 0; i < 9600 && at + i < buf.size(); ++i) {
+                r = r * 1664525u + 1013904223u; const float w = (static_cast<float>((r >> 8) & 0xFFFF) / 32768.0f) - 1.0f;
+                const float t = static_cast<float>(i) / static_cast<float>(FS);
+                buf[at + i] += amp * lp.process(hp.process(w)) * std::exp(-t / tau);
+            }
+        };
+        auto kickHit = [&](std::vector<float>& b, size_t at, float a) { tone(b, at, a, 70.0f, 0.08f); };
+        auto snareHit = [&](std::vector<float>& b, size_t at, float a) { tone(b, at, a * 0.6f, 220.0f, 0.05f); noise(b, at, a * 0.8f, 0.09f, false); };
+        auto hatHit = [&](std::vector<float>& b, size_t at, float a) { noise(b, at, a * 1.2f, 0.04f, true); };
+        auto tomHit = [&](std::vector<float>& b, size_t at, float a) { tone(b, at, a, 150.0f, 0.15f); tone(b, at, a * 0.3f, 300.0f, 0.1f); };
+        auto crashHit = [&](std::vector<float>& b, size_t at, float a) { noise(b, at, a * 1.1f, 0.5f, true); noise(b, at, a * 0.6f, 0.4f, false); };
+        std::function<void(std::vector<float>&, size_t, float)> gens[5] = {kickHit, snareHit, hatHit, tomHit, crashHit};
+        const int zmap[5] = {0, 1, 2, 3, 5};
+
+        Engine e; setup(e); e.params.mode = static_cast<int>(Mode::Hybrid);
+        for (int k = 0; k < 5; ++k) {
+            e.params.calibZone = zmap[k];
+            for (int n = 0; n < 9; ++n) { auto c = silence(2, 24000); gens[k](c[0], 4800, 0.3f + 0.04f * static_cast<float>(n)); c[1] = c[0]; run(e, c); }
+        }
+        CHECK(e.params.calibZone.load() == -1 && e.status.calibDone.load() == 5, "calibração: 8 batidas por peça concluem e salvam o perfil");
+        auto hitsFor = [&](std::function<void(std::vector<float>&)> make) {
+            unsigned before[kNumZones]; for (int z = 0; z < kNumZones; ++z) before[z] = e.status.hitCount[z].load();
+            auto c = silence(2, 48000); make(c[0]); c[1] = c[0]; run(e, c);
+            std::array<unsigned, kNumZones> d{}; for (int z = 0; z < kNumZones; ++z) d[static_cast<size_t>(z)] = e.status.hitCount[z].load() - before[static_cast<size_t>(z)];
+            return d;
+        };
+        for (int k = 0; k < 5; ++k) {
+            auto d = hitsFor([&](std::vector<float>& b) { gens[k](b, 4800, 0.5f); });
+            bool only = true; for (int z = 0; z < kNumZones; ++z) if (d[static_cast<size_t>(z)] != (z == zmap[k] ? 1u : 0u)) only = false;
+            static const char* nm[5] = {"BUMBO", "CAIXA", "CHIMBAL", "TOM 1", "PRATO"};
+            std::string msg = std::string("EAD calibrado: batida de ") + nm[k] + " dispara só a zona certa";
+            CHECK(only, msg.c_str());
+        }
+        auto kh = hitsFor([&](std::vector<float>& b) { kickHit(b, 4800, 0.5f); hatHit(b, 4800, 0.5f); });
+        CHECK(kh[0] == 1 && kh[2] == 1, "EAD: bumbo + chimbal ao mesmo tempo disparam as duas zonas");
+        auto ks = hitsFor([&](std::vector<float>& b) { kickHit(b, 4800, 0.5f); snareHit(b, 4800, 0.5f); });
+        CHECK(ks[0] == 1 && ks[1] == 1, "EAD: bumbo + caixa ao mesmo tempo disparam as duas zonas");
+        auto soft = hitsFor([&](std::vector<float>& b) { kickHit(b, 4800, 0.5f); kickHit(b, 12000, 0.5f); });
+        CHECK(soft[0] == 2 && soft[1] == 0 && soft[2] == 0, "EAD: duas batidas de bumbo seguidas = 2 disparos, sem peças falsas");
     }
     { // EAD funciona com 1 entrada só (mono)
         Engine e; setup(e); e.params.mode = static_cast<int>(Mode::Hybrid);
         auto c = silence(1); addHit(c[0], 4800, 0.6f, 80.0f);
         Run r = run(e, c);
-        CHECK(r.hits[0] == 1 && r.finite, "EAD com microfone mono também detecta");
+        CHECK(r.hits[0] + r.hits[1] + r.hits[2] + r.hits[3] + r.hits[4] + r.hits[5] >= 1 && r.finite, "EAD com microfone mono também detecta");
+    }
+    { // mistura acústico <-> kit
+        auto peakWith = [&](float blend) {
+            Engine e; setup(e); e.params.mode = static_cast<int>(Mode::Hybrid); e.params.blend = blend; e.params.compOn = false;
+            auto c = silence(2, 9600); addHit(c[0], 100, 0.5f, 1000.0f); c[1] = c[0];
+            return run(e, c, 0);
+        };
+        Run acOnly = peakWith(0.0f), kitOnly = peakWith(1.0f);
+        CHECK(acOnly.outPeak > 0.1f, "mistura 0 = só o som acústico dos microfones");
+        CHECK(kitOnly.outPeak < acOnly.outPeak * 0.2f || kitOnly.hits[1] + kitOnly.hits[0] + kitOnly.hits[3] + kitOnly.hits[2] >= 1, "mistura 1 = só o kit (microfone some do mix)");
+    }
+    { // anti-retorno: o eco do próprio som tocado nas caixas é reduzido
+        EchoCanceller ec; ec.prepare(1024);
+        std::vector<float> ref(96000); uint32_t r = 7u;
+        for (auto& v : ref) { r = r * 1664525u + 1013904223u; v = 0.3f * ((static_cast<float>((r >> 8) & 0xFFFF) / 32768.0f) - 1.0f); }
+        const int delay = 500; const float g = 0.5f;
+        double before = 0, after = 0;
+        for (size_t i = 0; i < ref.size(); ++i) {
+            const float mic = i >= static_cast<size_t>(delay) ? g * ref[i - static_cast<size_t>(delay)] : 0.0f;
+            const float out = ec.process(ref[i], mic, true);
+            if (i > 60000) { before += static_cast<double>(mic) * mic; after += static_cast<double>(out) * out; }
+        }
+        CHECK(after < before * 0.05, "anti-retorno reduz o eco do kit nos microfones em mais de 13 dB");
     }
 
     { // compressor

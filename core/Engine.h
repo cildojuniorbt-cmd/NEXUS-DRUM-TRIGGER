@@ -1,6 +1,8 @@
 #pragma once
 #include "Fx.h"
 #include "Sounds.h"
+#include "Spectral.h"
+#include "Aec.h"
 #include "Trigger.h"
 #include <array>
 #include <atomic>
@@ -9,7 +11,7 @@
 namespace nexus {
 
 constexpr int kNumPads = 8;    // módulo virtual: até 8 pads, cada um ligado a uma entrada da interface
-constexpr int kNumZones = 3;   // EAD: bumbo / caixa / chimbal separados por faixa de frequência
+constexpr int kNumZones = 6;   // EAD: bumbo, caixa, chimbal, tom 1, tom 2, prato (reconhecidos pelo espectro)
 constexpr int kMaxInputs = 8;
 constexpr int kMaxOutputs = 8;
 
@@ -57,10 +59,15 @@ struct EngineParams {
 
     // Comandos vindos da interface
     std::atomic<int> manualHit[kNumPads] = {{0}, {0}, {0}, {0}, {0}, {0}, {0}, {0}};  // velocity*1000 (0 = nenhum)
-    std::atomic<int> manualZone[kNumZones] = {{0}, {0}, {0}};
+    std::atomic<int> manualZone[kNumZones] = {{0}, {0}, {0}, {0}, {0}, {0}};
+    std::atomic<int> calibZone{-1};          // >=0: aprendendo o som dessa peça
+    std::atomic<float> profile[kNumZones][kBands];   // impressão digital de cada peça (0 = usar o padrão)
+    std::atomic<float> blend{0.5f};          // 0 = só acústico, 1 = só kit eletrônico
+    std::atomic<bool> antiFeedback{false};   // tira do microfone o som que o app toca nas caixas
     std::atomic<int> previewSound{-1};
 
     EngineParams() {
+        for (auto& z : profile) for (auto& v : z) v = 0.0f;
         // módulo virtual: bumbo, caixa, chimbal, tom 1, tom 2, surdo, prato 1, prato 2
         pad[0].setup(0, 0, -30.0f, 40.0f, 1500.0f, 70.0f, 0.0f);
         pad[1].setup(3, 1, -36.0f, 120.0f, 6000.0f, 70.0f, 0.0f);
@@ -74,6 +81,9 @@ struct EngineParams {
         zone[0].setup(0, 0, -30.0f, 30.0f, 150.0f, 70.0f, 0.0f);      // bumbo = graves
         zone[1].setup(3, 0, -32.0f, 800.0f, 4000.0f, 70.0f, 0.0f);    // caixa = médios
         zone[2].setup(8, 0, -30.0f, 7000.0f, 16000.0f, 40.0f, 0.25f); // chimbal = agudos
+        zone[3].setup(10, 0, -32.0f, 60.0f, 4000.0f, 60.0f, -0.2f);   // tom 1
+        zone[4].setup(12, 0, -32.0f, 60.0f, 4000.0f, 60.0f, 0.3f);    // tom 2 / surdo
+        zone[5].setup(13, 0, -32.0f, 2000.0f, 16000.0f, 120.0f, -0.4f); // prato
     }
 };
 
@@ -84,6 +94,8 @@ struct EngineStatus {
     std::atomic<unsigned> hitCount[kNumPads] = {{0u}, {0u}, {0u}, {0u}, {0u}, {0u}, {0u}, {0u}};
     std::atomic<float> outputLevel{0.0f};
     std::atomic<float> gainReductionDb{0.0f};
+    std::atomic<int> calibCount{0};      // batidas capturadas na calibração em andamento
+    std::atomic<int> calibDone{-1};      // última zona calibrada (para a interface avisar)
 };
 
 class Engine {
@@ -95,7 +107,9 @@ public:
         fs = sampleRate;
         bank.build(fs);
         for (int i = 0; i < kNumPads; ++i) { det[i].prepare(fs); det[i].setRecentWindowMs(12.0f); }
-        for (int i = 0; i < kNumZones; ++i) { zdet[i].prepare(fs); zdet[i].setRecentWindowMs(12.0f); }
+        sdet.prepare(fs); aec[0].prepare(1024); aec[1].prepare(1024); prevOut = 0.0f;
+        for (auto& h : zoneHold) h = 0;
+        calSeen = -1; calN = 0;
         eq.prepare(fs); comp.prepare(fs); reverb.prepare(fs);
         for (auto& v : voices) v = Voice{};
         voiceCounter = 0;
@@ -118,7 +132,21 @@ public:
             chan[p] = std::min(kMaxInputs - 1, std::max(0, params.pad[p].inputChannel.load()));
             det[p].configure(settingsOf(params.pad[p]));
         }
-        for (int z = 0; z < kNumZones; ++z) zdet[z].configure(settingsOf(params.zone[z]));
+        {   // EAD: reconhecedor espectral
+            SpectralSettings ss;
+            float minThr = 0.0f;
+            for (int z = 0; z < kNumZones; ++z) minThr = std::min(minThr, params.zone[z].thresholdDb.load() + std::min(0.0f, params.zone[z].inputGainDb.load()));
+            ss.minThresholdDb = std::max(-60.0f, minThr - 6.0f);
+            ss.relReject = 0.2f + 0.5f * params.bleedReject.load();
+            sdet.configure(ss);
+            float pr[kNumZones][kBands];
+            for (int z = 0; z < kNumZones; ++z) {
+                float nrm = 0.0f;
+                for (int b = 0; b < kBands; ++b) { pr[z][b] = params.profile[z][b].load(); nrm += pr[z][b] * pr[z][b]; }
+                if (nrm < 1e-9f) { const float* d = defaultProfile(z); for (int b = 0; b < kBands; ++b) pr[z][b] = d[b]; }
+            }
+            sdet.setProfiles(pr, kNumZones);
+        }
 
         const float bleed = params.bleedReject.load();
         eq.set(params.eqLowDb.load(), params.eqMidDb.load(), params.eqHighDb.load());
@@ -126,9 +154,11 @@ public:
                  params.compReleaseMs.load(), params.compMakeupDb.load());
         reverb.set(params.reverbRoom.load(), params.reverbDamp.load(), params.reverbWet.load());
         const bool compOn = params.compOn.load();
-        const float elec = params.electronicLevel.load();
+        const float blend = params.blend.load();
+        const bool aecOn = hybrid && params.antiFeedback.load();
+        const float elec = params.electronicLevel.load() * (hybrid ? std::min(1.0f, 2.0f * blend) : 1.0f);
         const float master = params.master.load();
-        const float acLvl = hybrid ? params.acousticLevel.load() : 0.0f;
+        const float acLvl = hybrid ? params.acousticLevel.load() * std::min(1.0f, 2.0f * (1.0f - blend)) : 0.0f;
         const float width = params.stereoWidth.load();
 
         // comandos da interface
@@ -151,17 +181,15 @@ public:
                 x[c] = (c < nIn && inputs[c]) ? inputs[c][i] : 0.0f;
                 inPeak[c] = std::max(inPeak[c], std::fabs(x[c]));
             }
+            if (aecOn) { for (int c = 0; c < 2; ++c) x[c] = aec[c].process(prevOut, x[c], true); }
 
             // 1) detecção
             if (hybrid) {
-                // EAD: os 2 microfones viram um par estéreo; o som todo (soma) é separado por faixa de frequência
+                // EAD: os 2 microfones viram um par estéreo; a soma é analisada pelo espectro (bumbo, caixa, chimbal, tons, prato)
                 const float m = nIn >= 2 ? 0.5f * (x[0] + x[1]) : x[0];
-                for (int z = 0; z < kNumZones; ++z) {
-                    float others = 0.0f;
-                    if (bleed > 0.0f) for (int q = 0; q < kNumZones; ++q) if (q != z) others = std::max(others, zdet[q].recentLevel());
-                    const TriggerEvent ev = zdet[z].process(m, others * bleed * 0.2f);
-                    if (ev.fired) fire(params.zone[z], z, ev.velocity);
-                }
+                for (auto& h : zoneHold) if (h > 0) --h;
+                SpectralHit sh;
+                if (sdet.process(m, sh)) onSpectral(sh);
             } else {
                 // Módulo virtual: cada pad escuta a sua entrada (com rejeição de vazamento entre os microfones)
                 for (int p = 0; p < active; ++p) {
@@ -201,6 +229,7 @@ public:
             R = softLimit(R + softLimit(bus[1] * elec * master));
             if (extra) for (int k = 2; k < kMaxOutputs; ++k) if (extra[k - 2]) extra[k - 2][i] = softLimit(bus[k] * elec * master);
             outL[i] = L; outR[i] = R;
+            prevOut = 0.5f * (L + R);
             outMeter = std::max(outMeter * 0.9995f, std::max(std::fabs(L), std::fabs(R)));
         }
 
@@ -227,6 +256,37 @@ private:
         unsigned long long age = 0;
         bool active = false;
     };
+
+    void onSpectral(const SpectralHit& sh) {
+        const int cal = params.calibZone.load();
+        if (cal != calSeen) { calSeen = cal; calN = 0; for (auto& v : calSum) v = 0.0f; status.calibCount.store(0); }
+        if (cal >= 0 && cal < kNumZones) {
+            float nrm = 0.0f; for (int b = 0; b < kBands; ++b) nrm += sh.observed[b] * sh.observed[b];
+            nrm = std::sqrt(nrm);
+            if (nrm < 1e-5f) return;
+            for (int b = 0; b < kBands; ++b) calSum[b] += sh.observed[b] / nrm;
+            ++calN; status.calibCount.store(calN);
+            fire(params.zone[cal], cal, 0.8f);
+            if (calN >= 8) {
+                for (int b = 0; b < kBands; ++b) params.profile[cal][b].store(calSum[b] / static_cast<float>(calN));
+                params.calibZone.store(-1); status.calibDone.store(cal); calSeen = -1; calN = 0;
+            }
+            return;
+        }
+        for (int j = 0; j < sh.count; ++j) {
+            const int z = sh.zone[j];
+            PadParams& zp = params.zone[z];
+            if (zoneHold[z] > 0) continue;
+            const float lvl = sh.level[j] * dbToLin(zp.inputGainDb.load());
+            const float thrDb = zp.thresholdDb.load();
+            if (linToDb(lvl) < thrDb) continue;
+            const float range = std::max(6.0f, -thrDb);
+            float v = std::min(1.0f, std::max(0.0f, (linToDb(lvl) - thrDb) / range));
+            v = std::pow(v, std::max(0.2f, zp.dynamics.load()));
+            zoneHold[z] = std::max(1, static_cast<int>(zp.retriggerMs.load() * 0.001 * fs));
+            fire(zp, z, std::max(0.04f, v));
+        }
+    }
 
     void fire(PadParams& pp, int statusIdx, float velocity) {
         const float sens = pp.velocitySens.load();
@@ -271,7 +331,13 @@ private:
 
     double fs = 48000.0;
     SoundBank bank;
-    TriggerDetector det[kNumPads], zdet[kNumZones];
+    TriggerDetector det[kNumPads];
+    SpectralDetector sdet;
+    EchoCanceller aec[2];
+    float prevOut = 0.0f;
+    int zoneHold[kNumZones] = {};
+    int calSeen = -1, calN = 0;
+    float calSum[kBands] = {};
     Eq3 eq; Compressor comp; Reverb reverb;
     std::array<Voice, 32> voices{};
     unsigned long long voiceCounter = 0;

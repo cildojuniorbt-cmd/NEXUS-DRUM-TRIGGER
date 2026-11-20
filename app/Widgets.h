@@ -41,7 +41,7 @@ public:
         if (!onSelect) return;
         int best = -1; float bd = 1e9f;
         for (int i = 0; i < numShown(); ++i) {
-            const auto c = spotRect(i);
+            const auto c = spotRect(spotOf(i));
             const float dx = (e.position.x - c.getCentreX()) / (c.getWidth() * 0.5f), dy = (e.position.y - c.getCentreY()) / (c.getHeight() * 0.5f);
             const float d = dx * dx + dy * dy;
             if (d < 1.2f && d < bd) { bd = d; best = i; }
@@ -62,7 +62,7 @@ public:
         g.setColour(theme::edge); g.drawRoundedRectangle(r.reduced(0.5f), 12.0f, 1.0f);
 
         for (int i = 0; i < numShown(); ++i) {
-            const auto c = spotRect(i);
+            const auto c = spotRect(spotOf(i));
             const bool act = isActive(i), sel = selected == i;
             if (flash[i] > 0.02f) {
                 for (int k = 3; k >= 1; --k) { g.setColour(theme::accent.withAlpha(flash[i] * 0.12f * static_cast<float>(4 - k))); g.fillEllipse(c.expanded(static_cast<float>(k) * 4.0f)); }
@@ -88,9 +88,10 @@ public:
     }
 
     static constexpr const char* kNames[8] = {"BUMBO", "CAIXA", "CHIMBAL", "TOM 1", "TOM 2", "SURDO", "PRATO 1", "PRATO 2"};
-    static constexpr const char* kZoneNames[3] = {"BUMBO · graves", "CAIXA · médios", "CHIMBAL · agudos"};
+    static constexpr const char* kZoneNames[6] = {"BUMBO", "CAIXA", "CHIMBAL", "TOM 1", "TOM 2", "PRATO"};
 
 private:
+    int spotOf(int i) const { static const int m[6] = {0, 1, 2, 3, 4, 6}; return hybrid ? m[i] : i; }
     juce::Rectangle<float> imageBox() const {
         const auto r = getLocalBounds().toFloat();
         if (!img.isValid()) return r;
@@ -181,7 +182,7 @@ public:
     void setPad(int p) {
         pad = p;
         static const char* names[] = {"Bumbo", "Caixa", "Chimbal", "Tom 1", "Tom 2", "Surdo", "Prato 1", "Prato 2"};
-        static const char* zn[] = {"Bumbo (graves)", "Caixa (médios)", "Chimbal (agudos)"};
+        static const char* zn[] = {"Bumbo", "Caixa", "Chimbal", "Tom 1", "Tom 2", "Prato"};
         setTitle(theme::u8("Detecção · ") + theme::u8(zone ? zn[p] : names[p]));
         refresh();
     }
@@ -196,6 +197,7 @@ public:
         if (outSel.getNumItems() != maxOutputs + 1) fillOut();
         if (!zone) outSel.setSelectedId(juce::jmin(maxOutputs, pp(engine, zone, pad).outRoute.load()) + 1, juce::dontSendNotification);
         for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->refresh();
+        hp.setVisible(!zone); lp.setVisible(!zone);
         inSel.setVisible(!zone); inLbl.setVisible(!zone);
         if (inSel.getNumItems() != nexus::kMaxInputs) {}
         if (maxInputs < nexus::kMaxInputs && inSel.getNumItems() > maxInputs) { inSel.clear(juce::dontSendNotification); for (int i = 1; i <= maxInputs; ++i) inSel.addItem(theme::u8("Entrada ") + juce::String(i), i); }
@@ -215,7 +217,8 @@ public:
             r.removeFromTop(2);
         }
         const int h = juce::jlimit(34, 48, r.getHeight() / 5);
-        for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->setBounds(r.removeFromTop(h));
+        if (zone) { const int h3 = juce::jlimit(34, 56, r.getHeight() / 3); for (auto* s : {&sens, &thr, &retrig}) s->setBounds(r.removeFromTop(h3)); }
+        else for (auto* s : {&sens, &thr, &retrig, &hp, &lp}) s->setBounds(r.removeFromTop(h));
     }
 private:
     void rebind() {
