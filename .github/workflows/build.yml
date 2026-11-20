@@ -28,7 +28,8 @@ jobs:
           name: win
           path: dist/NexusDrumTrigger-Setup.exe
   macos:
-    runs-on: macos-latest
+    runs-on: macos-15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Configurar e compilar (Intel + Apple Silicon)
@@ -49,7 +50,8 @@ jobs:
           path: NexusDrumTrigger-macOS.dmg
   release:
     needs: [windows, macos]
-    if: github.ref == 'refs/heads/main'
+    # publica o que ficou pronto: o Windows sai mesmo se a máquina Mac do GitHub falhar
+    if: always() && github.ref == 'refs/heads/main' && needs.windows.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -61,5 +63,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
+          ls -la dist
+          # se o Mac falhou, mantém o DMG anterior
+          if [ ! -f dist/NexusDrumTrigger-macOS.dmg ]; then gh release download latest -p NexusDrumTrigger-macOS.dmg -D dist || true; fi
           gh release delete latest -y --cleanup-tag || true
-          gh release create latest dist/NexusDrumTrigger-Setup.exe dist/NexusDrumTrigger-macOS.dmg --target ${{ github.sha }} --title "Nexus Drum Trigger" --notes "Windows: baixe e execute NexusDrumTrigger-Setup.exe. Mac: abra o DMG e arraste o app para Aplicativos; na primeira vez, clique com o botao direito no app e escolha Abrir."
+          gh release create latest dist/* --target ${{ github.sha }} --title "Nexus Drum Trigger" --notes "Windows: baixe e execute NexusDrumTrigger-Setup.exe. Mac: abra o DMG e arraste o app para Aplicativos; na primeira vez, clique com o botao direito no app e escolha Abrir."
